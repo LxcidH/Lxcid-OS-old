@@ -1,53 +1,96 @@
-# Define the commands to run for the cross-compiler
-AS = i686-elf-as
-CC = i686-elf-gcc
-LD = i686-elf-ld
+# ========================================================================= #
+#                         Makefile for LxcidOS                              #
+#         (Corrected for the user's specific project structure)             #
+# ========================================================================= #
 
-# Define source and build directories
-SRCDIR = src
-DRVDIR = drivers
+# --- Commands ---
+CC = i686-elf-gcc
+AS = nasm
+
+# --- Directories ---
 BUILDDIR = build
 
-# Use VPATH to tell make where to find source files
-VPATH = $(SRCDIR):$(DRVDIR)
+# --- Source Files ---
+# List the full, explicit path to every source file.
+C_SOURCES = \
+    src/kernel.c \
+    drivers/terminal.c \
+    drivers/pic.c \
+    drivers/keyboard.c \
+	shell/shell.c \
+    idt/idt.c \
+    io/io.c \
 
-# List source file BASENAMES, not full paths
-C_SOURCES = kernel.c terminal.c
-ASM_SOURCES = boot.asm
+ASM_SOURCES = \
+    src/boot.asm \
+    idt/interrupts.asm \
+    io/io.asm
 
-# Create lists of object files in the build directory
-C_OBJS = $(patsubst %.c, $(BUILDDIR)/%.o, $(C_SOURCES))
-ASM_OBJS = $(patsubst %.asm, $(BUILDDIR)/%.o, $(ASM_SOURCES))
-OBJS = $(C_OBJS) $(ASM_OBJS)
+# --- Object Files ---
+# Automatically generate the list of object files in the build directory.
+OBJS = \
+    $(patsubst src/%.c, $(BUILDDIR)/%.o, $(filter src/%.c, $(C_SOURCES))) \
+    $(patsubst drivers/%.c, $(BUILDDIR)/%.o, $(filter drivers/%.c, $(C_SOURCES))) \
+    $(patsubst idt/%.c, $(BUILDDIR)/%.o, $(filter idt/%.c, $(C_SOURCES))) \
+    $(patsubst io/%.c, $(BUILDDIR)/%.o, $(filter io/%.c, $(C_SOURCES))) \
+    $(patsubst src/%.asm, $(BUILDDIR)/%.o, $(filter src/%.asm, $(ASM_SOURCES))) \
+    $(patsubst idt/%.asm, $(BUILDDIR)/%.o, $(filter idt/%.asm, $(ASM_SOURCES))) \
+    $(patsubst io/%.asm, $(BUILDDIR)/%.o, $(filter io/%.asm, $(ASM_SOURCES))) \
+ $(patsubst shell/%.c, $(BUILDDIR)/%.o, $(filter shell/%.c, $(C_SOURCES))) \
+# --- Flags ---
+# Add an include path for every directory that contains header files.
+CFLAGS = -ffreestanding -fno-pie -nostdlib -Wall -Wextra -Isrc -Idrivers -Iidt -Iio
+ASFLAGS = -f elf32
 
-# Flags for the C compiler
-# Add include paths for both src and drivers directories
-CFLAGS = -ffreestanding -fno-pie -nostdlib -Wall -Wextra -I$(SRCDIR) -I$(DRVDIR)
+# ========================================================================= #
+#                              BUILD RULES                                  #
+# ========================================================================= #
 
-# --- Primary Build Rules ---
-
+# --- Primary Build Rule ---
 all: $(BUILDDIR)/kernel.bin
 
-# Rule to link all object files into the final kernel binary
-# FIX: Added $(CFLAGS) to the linker command to pass -nostdlib
+# Rule to link all object files into the final kernel binary.
 $(BUILDDIR)/kernel.bin: $(OBJS)
+	@mkdir -p $(@D)
 	$(CC) -T linker.ld -o $@ $^ $(CFLAGS) -lgcc
 
 # --- Compilation Rules ---
+# We need a separate, explicit rule for each source directory.
 
-# A generic rule to compile any .c file into a .o file
-# Because of VPATH, make will find the source file in the correct directory
-$(BUILDDIR)/%.o: %.c
+$(BUILDDIR)/%.o: src/%.c
 	@mkdir -p $(@D)
-	$(CC) -c $< -o $@ $(CFLAGS)
+	$(CC) $(CFLAGS) -c $< -o $@
 
-# A generic rule to assemble any .asm file into a .o file
-$(BUILDDIR)/%.o: %.asm
+$(BUILDDIR)/%.o: drivers/%.c
 	@mkdir -p $(@D)
-	nasm $< -f elf32 -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILDDIR)/%.o: idt/%.c
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILDDIR)/%.o: io/%.c
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILDDIR)/%.o: shell/%.c
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILDDIR)/%.o: src/%.asm
+	@mkdir -p $(@D)
+	$(AS) $(ASFLAGS) $< -o $@
+
+$(BUILDDIR)/%.o: idt/%.asm
+	@mkdir -p $(@D)
+	$(AS) $(ASFLAGS) $< -o $@
+
+$(BUILDDIR)/%.o: io/%.asm
+	@mkdir -p $(@D)
+	$(AS) $(ASFLAGS) $< -o $@
+
 
 # --- Utility Rules ---
-
 run: all
 	qemu-system-i386 -kernel $(BUILDDIR)/kernel.bin
 
