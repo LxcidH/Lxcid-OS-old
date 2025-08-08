@@ -1,6 +1,25 @@
 #include <stdint.h>
 #include "terminal.h"
 
+// Define terminal colors
+enum fgcolor {
+    FG_BLACK         =   0x00,
+    FG_BLUE          =   0x01,
+    FG_GREEN         =   0x02,
+    FG_CYAN          =   0x03,
+    FG_RED           =   0x04,
+    FG_MAGENTA       =   0x05,
+    FG_BROWN         =   0x06,
+    FG_LIGHT_GRAY    =   0x07,
+    FG_DARK_GRAY     =   0x08,
+    FG_LIGHT_BLUE    =   0x09,
+    FG_LIGHT_GREEN   =   0x0A,
+    FG_LIGHT_CYAN    =   0x0B,
+    FG_LIGHT_RED     =   0x0C,
+    FG_LIGHT_MAGENTA =   0x0D,
+    FG_YELLOW        =   0x0E,
+    FG_WHITE         =   0x0F
+};
 
 // Define the dimensions of the VGA text-mode buffer
 static const size_t VGA_WIDTH = 80;
@@ -31,7 +50,7 @@ static uint8_t terminal_color;
 void terminal_initialize(void) {
     terminal_row = 0;
     terminal_column = 0;
-    terminal_color = 0x0A; // light green text on black background
+    terminal_color = FG_WHITE; // light green text on black background
 
     // Clear the entire screen
     for(size_t y = 0; y < VGA_HEIGHT; y++) {
@@ -42,13 +61,32 @@ void terminal_initialize(void) {
     }
 }
 
+// Scrolls the terminal
+void terminal_scroll() {
+    for(size_t y = 1; y < VGA_HEIGHT; y++) {
+        for(size_t x = 0; x < VGA_WIDTH; x++) {
+            const size_t index_to = (y - 1) * VGA_WIDTH + x;
+            const size_t index_from = y * VGA_WIDTH + x;
+            VGA_MEMORY[index_to] = VGA_MEMORY[index_from];
+        }
+    }
+    // Clear last line of terminal
+    const size_t last_row = VGA_HEIGHT - 1;
+    for(size_t x = 0; x < VGA_WIDTH; x++) {
+        const size_t index = last_row * VGA_WIDTH + x;
+        VGA_MEMORY[index] = vga_entry(' ', terminal_color);
+    }
+}
+
 // Puts a single character on the screen at the current cursor pos
 void terminal_putchar(char c) {
     // Handle newlines seperately
     if(c == '\n'){
         terminal_column = 0;
         terminal_row++;
-        // TODO: Add scrolling when terminal_row == VGA_HEIGHT
+        if(terminal_row == VGA_HEIGHT) {
+            terminal_scroll();
+        }
         return;
     }
 
@@ -60,7 +98,9 @@ void terminal_putchar(char c) {
     if(++terminal_column == VGA_WIDTH) {
         terminal_column = 0;
         terminal_row++;
-        // TODO: Add scrolling when terminal_row == VGA_HEIGHT
+        if(terminal_row == VGA_HEIGHT) {
+            terminal_scroll();
+        }
     }
 }
 
@@ -71,4 +111,19 @@ void terminal_writestring(const char* data) {
         terminal_putchar(data[len]);
         len++;
     }
+}
+
+// Writes a null-terminated error msg to terminal
+void terminal_writeerror(const char* data) {
+    uint8_t orig_term_color = terminal_color;
+    terminal_color = FG_RED;
+    terminal_writestring("ERROR: ");
+    terminal_writestring(data);
+    terminal_color = orig_term_color;
+}
+
+void terminal_welcome() {
+    terminal_color = FG_MAGENTA;
+    terminal_writestring("LxcidOS - Version 0.0.1\n");
+    terminal_color = FG_WHITE;
 }

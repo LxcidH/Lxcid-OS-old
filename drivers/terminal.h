@@ -12,4 +12,8 @@ void terminal_putchar(char c);
 /* Function to print a null-terminated string */
 void terminal_writestring(const char* data);
 
+void terminal_writeerror(const char* data);
+
+void terminal_welcome();
+
 #endif

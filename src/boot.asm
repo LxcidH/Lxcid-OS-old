@@ -6,7 +6,13 @@ section .multiboot
 
 section .text
 extern kmain
+extern idt_ptr
 global start
+global idt_load
+
+idt_load:
+    lidt [idt_ptr]
+    ret
 
 start:
     ; The bootloader (QEMU) has already put us in 32-bit protected mode.
