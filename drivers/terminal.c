@@ -1,4 +1,3 @@
-#include <stdint.h>
 #include "terminal.h"
 
 // Define terminal colors
@@ -61,6 +60,13 @@ void terminal_initialize(void) {
     }
 }
 
+void terminal_set_cursor(size_t x, size_t y) {
+    terminal_column = x;
+    terminal_row = y;
+    // The VGA hardware cursor is controlled via I/O ports
+    // We will add this later
+}
+
 // Scrolls the terminal
 void terminal_scroll() {
     for(size_t y = 1; y < VGA_HEIGHT; y++) {
@@ -76,31 +82,73 @@ void terminal_scroll() {
         const size_t index = last_row * VGA_WIDTH + x;
         VGA_MEMORY[index] = vga_entry(' ', terminal_color);
     }
+    terminal_row = VGA_HEIGHT - 1;
 }
 
 // Puts a single character on the screen at the current cursor pos
 void terminal_putchar(char c) {
-    // Handle newlines seperately
-    if(c == '\n'){
-        terminal_column = 0;
-        terminal_row++;
-        if(terminal_row == VGA_HEIGHT) {
-            terminal_scroll();
+    // Handle backspace character
+    if (c == '\b') {
+        if (terminal_column > 0) {
+            terminal_column--;
+            const size_t index = terminal_row * VGA_WIDTH + terminal_column;
+            VGA_MEMORY[index] = vga_entry(' ', terminal_color);
         }
+        // Note: This doesn't handle backspacing over a line break yet.
         return;
     }
 
-    // Place the character at the current cursor pos
-    const size_t index = terminal_row * VGA_WIDTH + terminal_column;
-    VGA_MEMORY[index] = vga_entry(c, terminal_color);
-
-    // Advance the cursor
-    if(++terminal_column == VGA_WIDTH) {
+    // Handle newline character
+    if (c == '\n') {
         terminal_column = 0;
         terminal_row++;
-        if(terminal_row == VGA_HEIGHT) {
-            terminal_scroll();
+    } else {
+        // Handle all other, normal characters
+        const size_t index = terminal_row * VGA_WIDTH + terminal_column;
+        VGA_MEMORY[index] = vga_entry(c, terminal_color);
+        if (++terminal_column == VGA_WIDTH) {
+            terminal_column = 0;
+            terminal_row++;
         }
+    }
+
+    // If the cursor is now off the screen, scroll.
+    if (terminal_row >= VGA_HEIGHT) {
+        terminal_scroll();
+    }
+}
+
+// A robust function to print a number in decimal.
+// It also pads with spaces to clear old digits.
+void terminal_writedec(uint32_t n) {
+    // Handle the special case of 0 separately
+    if (n == 0) {
+        terminal_putchar('0');
+        terminal_writestring("         "); // Pad with spaces
+        return;
+    }
+
+    // A small buffer to hold the digits of the number
+    char buffer[12];
+    int i = 0;
+
+    // Convert the number to a string of digits, in reverse order
+    while (n > 0) {
+        buffer[i] = (n % 10) + '0';
+        n /= 10;
+        i++;
+    }
+
+    // The digits are in reverse order, so we need to print the buffer backwards
+    for (int j = i - 1; j >= 0; j--) {
+        terminal_putchar(buffer[j]);
+    }
+
+    // After printing the number, print enough spaces to clear out any
+    // digits from a previous, larger number (e.g., clearing '10' when printing '9').
+    // We'll pad up to 10 digits.
+    for (int k = i; k < 10; k++) {
+        terminal_putchar(' ');
     }
 }
 
