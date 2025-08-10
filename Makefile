@@ -1,49 +1,36 @@
 # ========================================================================= #
-#                         Makefile for LxcidOS                              #
-#         (Corrected for the user's specific project structure)             #
+#                         Makefile for LxcidOS                            #
+#                (Simplified, Corrected, and Automated)                   #
 # ========================================================================= #
 
 # --- Commands ---
 CC = i686-elf-gcc
 AS = nasm
+RM = rm -rf
 
 # --- Directories ---
 BUILDDIR = build
 
-# --- Source Files ---
-# List the full, explicit path to every source file.
-C_SOURCES = \
-    src/kernel.c \
-    drivers/terminal.c \
-    drivers/pic.c \
-    drivers/keyboard.c \
-	shell/shell.c \
-    idt/idt.c \
-    io/io.c \
-
-ASM_SOURCES = \
-    src/boot.asm \
-    idt/interrupts.asm \
-    io/io.asm
+# --- Automatic Source File Discovery ---
+# This finds all .c and .asm files in the project directories.
+C_SOURCES = $(shell find src drivers idt io lib shell memory -name '*.c')
+ASM_SOURCES = $(shell find src drivers idt io lib shell -name '*.asm')
 
 # --- Object Files ---
-# Automatically generate the list of object files in the build directory.
-OBJS = \
-    $(patsubst src/%.c, $(BUILDDIR)/%.o, $(filter src/%.c, $(C_SOURCES))) \
-    $(patsubst drivers/%.c, $(BUILDDIR)/%.o, $(filter drivers/%.c, $(C_SOURCES))) \
-    $(patsubst idt/%.c, $(BUILDDIR)/%.o, $(filter idt/%.c, $(C_SOURCES))) \
-    $(patsubst io/%.c, $(BUILDDIR)/%.o, $(filter io/%.c, $(C_SOURCES))) \
-    $(patsubst src/%.asm, $(BUILDDIR)/%.o, $(filter src/%.asm, $(ASM_SOURCES))) \
-    $(patsubst idt/%.asm, $(BUILDDIR)/%.o, $(filter idt/%.asm, $(ASM_SOURCES))) \
-    $(patsubst io/%.asm, $(BUILDDIR)/%.o, $(filter io/%.asm, $(ASM_SOURCES))) \
- $(patsubst shell/%.c, $(BUILDDIR)/%.o, $(filter shell/%.c, $(C_SOURCES))) \
+# This automatically generates the .o paths in the build directory.
+C_OBJS = $(patsubst %.c, $(BUILDDIR)/%.o, $(C_SOURCES))
+ASM_OBJS = $(patsubst %.asm, $(BUILDDIR)/%.o, $(ASM_SOURCES))
+OBJS = $(C_OBJS) $(ASM_OBJS)
+
 # --- Flags ---
-# Add an include path for every directory that contains header files.
-CFLAGS = -ffreestanding -fno-pie -nostdlib -Wall -Wextra -Isrc -Idrivers -Iidt -Iio
+# Add -I for every directory that might contain a .h file.
+# Also add -Ilib because you should create a string.h in there.
+CFLAGS = -ffreestanding -fno-pie -nostdlib -Wall -Wextra -Isrc -Idrivers -Iidt -Iio -Ilib -Ishell -Imemory
 ASFLAGS = -f elf32
+LDFLAGS = -T linker.ld -lgcc
 
 # ========================================================================= #
-#                              BUILD RULES                                  #
+#                               BUILD RULES                                 #
 # ========================================================================= #
 
 # --- Primary Build Rule ---
@@ -52,47 +39,27 @@ all: $(BUILDDIR)/kernel.bin
 # Rule to link all object files into the final kernel binary.
 $(BUILDDIR)/kernel.bin: $(OBJS)
 	@mkdir -p $(@D)
-	$(CC) -T linker.ld -o $@ $^ $(CFLAGS) -lgcc
+	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
+	@echo "✅ Kernel linked successfully: $@"
 
-# --- Compilation Rules ---
-# We need a separate, explicit rule for each source directory.
-
-$(BUILDDIR)/%.o: src/%.c
+# --- Generic Compilation Rules ---
+# This single rule handles ALL C files from any directory.
+$(BUILDDIR)/%.o: %.c
 	@mkdir -p $(@D)
+	@echo "CC $<"
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILDDIR)/%.o: drivers/%.c
+# This single rule handles ALL Assembly files from any directory.
+$(BUILDDIR)/%.o: %.asm
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(BUILDDIR)/%.o: idt/%.c
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(BUILDDIR)/%.o: io/%.c
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(BUILDDIR)/%.o: shell/%.c
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(BUILDDIR)/%.o: src/%.asm
-	@mkdir -p $(@D)
+	@echo "AS $<"
 	$(AS) $(ASFLAGS) $< -o $@
-
-$(BUILDDIR)/%.o: idt/%.asm
-	@mkdir -p $(@D)
-	$(AS) $(ASFLAGS) $< -o $@
-
-$(BUILDDIR)/%.o: io/%.asm
-	@mkdir -p $(@D)
-	$(AS) $(ASFLAGS) $< -o $@
-
 
 # --- Utility Rules ---
 run: all
 	qemu-system-i386 -kernel $(BUILDDIR)/kernel.bin
-
 clean:
-	rm -rf $(BUILDDIR)
+	@echo "Cleaning build directory..."
+	$(RM) $(BUILDDIR)
+
+.PHONY: all run clean

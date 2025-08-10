@@ -8,6 +8,6 @@
 void shell_init(void);
 
 // Handles a key press from the keyboard driver
-void shell_handle_key(char c);
+void shell_handle_key(int c);
 
 #endif

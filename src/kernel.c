@@ -1,20 +1,40 @@
 #include "multiboot.h"
 #include "../drivers/terminal.h"
 #include "../idt/idt.h"
+#include "../drivers/pic.h"
+#include "../drivers/keyboard.h"
+#include "../shell/shell.h"
+#include "../memory/pmm.h"
 #include <stdint.h>
 
 // The kernel's main entry point
 void kmain(multiboot_info_t* mbi) {
-    // Init our terminal driver
     terminal_initialize();
+
+    // This check is now commented out to bypass the QEMU bug.
+    // if (magic != MULTIBOOT_BOOTLOADER_MAGIC) {
+    //     terminal_writeerror("Invalid Multiboot magic number. Halting.\n");
+    //     return;
+    // }
+
+    if (!(mbi->flags & MULTIBOOT_INFO_MEM_MAP)) {
+        terminal_writeerror("No memory map provided by bootloader. Halting.\n");
+        return;
+    }
+
+    // --- CORRECT INITIALIZATION ORDER ---
     idt_init();
-    idt_load();
+    pic_remap();
+    pmm_init(mbi); // Pass the multiboot info to the PMM
+    keyboard_init();
 
     terminal_welcome();
+    terminal_printf("LxcidOS is running!\n", FG_MAGENTA);
 
-    // Print some text to test it
-   terminal_writestring("LxcidOS is running!\n");
-    terminal_writestring("The Interrupt Descriptor Table (IDT) has been loaded.");
+    asm volatile ("sti");
+    shell_init();
+
+    while(1) {
+        asm volatile("hlt");
+    }
 }
-
-

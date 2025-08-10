@@ -1,24 +1,5 @@
 #include "terminal.h"
-
-// Define terminal colors
-enum fgcolor {
-    FG_BLACK         =   0x00,
-    FG_BLUE          =   0x01,
-    FG_GREEN         =   0x02,
-    FG_CYAN          =   0x03,
-    FG_RED           =   0x04,
-    FG_MAGENTA       =   0x05,
-    FG_BROWN         =   0x06,
-    FG_LIGHT_GRAY    =   0x07,
-    FG_DARK_GRAY     =   0x08,
-    FG_LIGHT_BLUE    =   0x09,
-    FG_LIGHT_GREEN   =   0x0A,
-    FG_LIGHT_CYAN    =   0x0B,
-    FG_LIGHT_RED     =   0x0C,
-    FG_LIGHT_MAGENTA =   0x0D,
-    FG_YELLOW        =   0x0E,
-    FG_WHITE         =   0x0F
-};
+#include <stdarg.h>
 
 // Define the dimensions of the VGA text-mode buffer
 static const size_t VGA_WIDTH = 80;
@@ -38,19 +19,15 @@ static inline uint16_t vga_entry(unsigned char uc, uint8_t color) {
     return (uint16_t) uc | (uint16_t) color << 8;
 }
 
-
-// Variables to keep track of the cursor position and color
-static size_t terminal_row;
-static size_t terminal_column;
-static uint8_t terminal_color;
-
-
 // Initialises the terminal by clearing it and setting up the state
 void terminal_initialize(void) {
     terminal_row = 0;
     terminal_column = 0;
-    terminal_color = FG_WHITE; // light green text on black background
+    terminal_color = FG_WHITE;
+    terminal_clear();
+}
 
+void terminal_clear() {
     // Clear the entire screen
     for(size_t y = 0; y < VGA_HEIGHT; y++) {
         for(size_t x = 0; x < VGA_WIDTH; x++) {
@@ -86,7 +63,9 @@ void terminal_scroll() {
 }
 
 // Puts a single character on the screen at the current cursor pos
-void terminal_putchar(char c) {
+void terminal_putchar(char c, uint8_t color) {
+    uint8_t orig_term_color = terminal_color;
+    terminal_color = color;
     // Handle backspace character
     if (c == '\b') {
         if (terminal_column > 0) {
@@ -116,6 +95,8 @@ void terminal_putchar(char c) {
     if (terminal_row >= VGA_HEIGHT) {
         terminal_scroll();
     }
+
+    terminal_color = orig_term_color;
 }
 
 // A robust function to print a number in decimal.
@@ -123,8 +104,8 @@ void terminal_putchar(char c) {
 void terminal_writedec(uint32_t n) {
     // Handle the special case of 0 separately
     if (n == 0) {
-        terminal_putchar('0');
-        terminal_writestring("         "); // Pad with spaces
+        terminal_putchar('0', FG_WHITE);
+        terminal_writestring("         ", FG_WHITE); // Pad with spaces
         return;
     }
 
@@ -141,37 +122,94 @@ void terminal_writedec(uint32_t n) {
 
     // The digits are in reverse order, so we need to print the buffer backwards
     for (int j = i - 1; j >= 0; j--) {
-        terminal_putchar(buffer[j]);
+        terminal_putchar(buffer[j], FG_WHITE);
     }
 
     // After printing the number, print enough spaces to clear out any
     // digits from a previous, larger number (e.g., clearing '10' when printing '9').
     // We'll pad up to 10 digits.
     for (int k = i; k < 10; k++) {
-        terminal_putchar(' ');
+        terminal_putchar(' ', FG_WHITE);
     }
+}
+
+// This function does the actual work. It takes a va_list.
+void terminal_vprintf(const char* format, uint8_t color, va_list args) {
+    char int_buffer[32];
+
+    for (const char* p = format; *p != '\0'; p++) {
+        if (*p != '%') {
+            terminal_putchar(*p, color);
+            continue;
+        }
+
+        p++; // Move to the character after '%'
+
+        switch (*p) {
+            case 'c': {
+                char c = (char)va_arg(args, int);
+                terminal_putchar(c, color);
+                break;
+            }
+            case 's': {
+                const char* s = va_arg(args, const char*);
+                terminal_writestring(s, color); // Assuming you have a color version
+                break;
+            }
+            case 'd': {
+                int d = va_arg(args, int);
+                itoa(d, int_buffer, 10);
+                terminal_writestring(int_buffer, color);
+                break;
+            }
+            case 'x': {
+                int x = va_arg(args, int);
+                // It's common to add the "0x" prefix for clarity
+                terminal_writestring("0x", color);
+                itoa(x, int_buffer, 16); // Use base 16 for hexadecimal
+                terminal_writestring(int_buffer, color);
+            }
+            // ... other cases ...
+        }
+    }
+}
+
+// This is now just a convenient wrapper around terminal_vprintf.
+void terminal_printf(const char* format, uint8_t color, ...) {
+    va_list args;
+    va_start(args, color); // Initialize the list after the last named argument
+
+    terminal_vprintf(format, color, args); // Call the real worker function
+
+    va_end(args); // Clean up
 }
 
 // Writes a null-terminated string to the terminal
-void terminal_writestring(const char* data) {
+void terminal_writestring(const char* data, uint8_t color) {
+    uint8_t orig_term_color = terminal_color;
+    terminal_color = color;
     size_t len = 0;
     while(data[len]) {
-        terminal_putchar(data[len]);
+        terminal_putchar(data[len], color);
         len++;
     }
-}
-
-// Writes a null-terminated error msg to terminal
-void terminal_writeerror(const char* data) {
-    uint8_t orig_term_color = terminal_color;
-    terminal_color = FG_RED;
-    terminal_writestring("ERROR: ");
-    terminal_writestring(data);
     terminal_color = orig_term_color;
 }
 
+void terminal_writeerror(const char* format, ...) {
+    // 1. Print the "ERROR: " prefix in red
+    terminal_printf("ERROR: ", FG_RED);
+
+    // 2. Process the user's format string and arguments
+    va_list args;
+    va_start(args, format);
+    terminal_vprintf(format, FG_RED, args);
+    va_end(args);
+
+    // 3. Print a newline at the end
+    terminal_putchar('\n', FG_RED);
+}
+
 void terminal_welcome() {
-    terminal_color = FG_MAGENTA;
-    terminal_writestring("LxcidOS - Version 0.0.1\n");
-    terminal_color = FG_WHITE;
+    terminal_printf("LxcidOS - Version 0.0.1\n", FG_MAGENTA);
 }

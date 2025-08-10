@@ -3,27 +3,41 @@
 
 #include <stdint.h>
 
-/* The structure for an entry in the IDT */
-struct idt_gate_t {
-    uint16_t offset_low;    // Lower 16 bits of the handler function address
-    uint16_t selector;      // Kernel code segment selector
-    uint8_t  zero;          // This must always be zero
-    uint8_t  flags;         // Flags. See documentation.
-    uint16_t offset_high;   // Upper 16 bits of the handler function address
+// A single entry in the Interrupt Descriptor Table (IDT).
+struct idt_entry_struct
+{
+    uint16_t base_low;      // The lower 16 bits of the address to jump to.
+    uint16_t selector;      // The kernel segment selector.
+    uint8_t  always0;       // This must always be zero.
+    uint8_t  flags;         // The entry's type and attributes.
+    uint16_t base_high;     // The upper 16 bits of the address to jump to.
 } __attribute__((packed));
 
-/* The structure for the IDT pointer */
-struct idt_descriptor_t {
-    uint16_t limit;         // The size of the IDT
-    uint32_t base;          // The address of the first IDT entry
+// The structure the 'lidt' instruction needs to locate the IDT.
+struct idt_ptr_struct
+{
+    uint16_t limit;         // The size of the IDT in bytes - 1.
+    uint32_t base;          // The base address of the IDT.
 } __attribute__((packed));
 
+// This struct defines the data pushed onto the stack by our assembly stubs.
+// It must precisely match the order of registers pushed by 'pusha' and the
+// stack layout after an interrupt.
+struct registers
+{
+    uint32_t edi, esi, ebp, esp, ebx, edx, ecx, eax; // Pushed by 'pusha'.
+    uint32_t ds;                                    // Data segment selector.
+    uint32_t int_no, err_code;                      // Pushed by our ISR stub.
+    uint32_t eip, cs, eflags, useresp, ss;           // Pushed by the processor automatically.
+};
 
-// Declare our IDT and its descriptor
-extern struct idt_gate_t idt[256];
-extern struct idt_descriptor_t idt_ptr;
+// The main initialization function for the IDT.
+void idt_init(void);
 
-/* A function to load our IDT */
-void idt_load();
+// The C wrapper for the 'lidt' instruction.
+static inline void idt_load(struct idt_ptr_struct* idt_ptr)
+{
+    asm volatile ("lidt (%0)" : : "r"(idt_ptr));
+}
 
 #endif
