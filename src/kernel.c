@@ -29,7 +29,6 @@ void kmain(multiboot_info_t* mbi) {
     keyboard_init();
 
     terminal_welcome();
-    terminal_printf("LxcidOS is running!\n", FG_MAGENTA);
 
     asm volatile ("sti");
     shell_init();

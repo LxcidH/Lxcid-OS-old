@@ -4,6 +4,7 @@
 #include <stddef.h> // For size_t
 #include <stdint.h>
 #include "../lib/string.h"
+#include "../io/io.h" // Add this include for outb
 
 // Define terminal colors
 enum fgcolor {

@@ -298,33 +298,46 @@ void shell_init(void) {
 }
 
 void shell_handle_key(int c) {
-        if (c == KEY_UP) {
-             terminal_printf("[DEBUG: history_count = %d, history_head = %d]\n", history_count, history_head);
-        if (history_count > 0) {
-            if (history_current == -1) {
-                // If we are not in history mode, start from the newest command
-                history_current = (history_head - 1 + HISTORY_MAX_SIZE) % HISTORY_MAX_SIZE;
-            } else if (history_current != history_head) {
-                // Move to the previous (older) command
-                history_current = (history_current - 1 + HISTORY_MAX_SIZE) % HISTORY_MAX_SIZE;
-            }
+    if (c == KEY_UP) {
+        if (history_count == 0) {
+            // Nothing in history, so do nothing.
+            return;
+        }
+
+        // Calculate the index of the OLDEST command in the circular buffer.
+        int oldest_index = (history_head - history_count + HISTORY_MAX_SIZE) % HISTORY_MAX_SIZE;
+
+        if (history_current == -1) {
+            // If we weren't in history mode, start by showing the NEWEST command.
+            history_current = (history_head - 1 + HISTORY_MAX_SIZE) % HISTORY_MAX_SIZE;
+            shell_redraw_line();
+        } else if (history_current != oldest_index) {
+            // If we are not at the oldest command yet, move to the previous (older) one.
+            history_current = (history_current - 1 + HISTORY_MAX_SIZE) % HISTORY_MAX_SIZE;
             shell_redraw_line();
         }
+        // If we are already at the oldest command, do nothing.
         return;
     }
 
     if (c == KEY_DOWN) {
-        if (history_current != -1) {
-            // Move to the next (newer) command
-            history_current = (history_current + 1) % HISTORY_MAX_SIZE;
-            if (history_current == history_head) {
-                // We've reached the end, go back to a blank line
-                history_current = -1;
-                cmd_buffer[0] = '\0'; // Clear buffer
-                shell_redraw_line(); // Redraw (which will clear the line)
-            } else {
-                shell_redraw_line();
-            }
+        if (history_current == -1) {
+            // If we are not in history mode, do nothing.
+            return;
+        }
+
+        // Move to the next (newer) command.
+        history_current = (history_current + 1) % HISTORY_MAX_SIZE;
+
+        if (history_current == history_head) {
+            // If we've reached the "end" of the history (the empty slot after the newest command),
+            // exit history mode and clear the line.
+            history_current = -1;
+            cmd_buffer[0] = '\0';
+            shell_redraw_line();
+        } else {
+            // Otherwise, just show the newer command.
+            shell_redraw_line();
         }
         return;
     }

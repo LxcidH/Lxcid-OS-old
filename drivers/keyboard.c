@@ -4,10 +4,11 @@
 #include "../shell/shell.h"
 #include <stdint.h>
 
-// --- Scancode Maps ---
-// Index corresponds to the scancode received from the keyboard.
+// --- I/O Ports ---
+#define KBD_STATUS_PORT 0x64
+#define KBD_DATA_PORT   0x60
 
-// Standard US QWERTY layout
+// --- Scancode Maps (US QWERTY) ---
 const char scancode_map_base[128] = {
     0,  27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',
     '\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n',
@@ -17,7 +18,6 @@ const char scancode_map_base[128] = {
     '-', 0, 0, 0, '+', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 };
 
-// Shifted US QWERTY layout
 const char scancode_map_shifted[128] = {
     0,  27, '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', '\b',
     '\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', '\n',
@@ -27,63 +27,76 @@ const char scancode_map_shifted[128] = {
     '-', 0, 0, 0, '+', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 };
 
-// --- Keyboard State Variables ---
+// --- Keyboard State ---
 static int escape_state = 0;
 static int shift_pressed = 0;
 
-// This is our C-level keyboard interrupt handler
+
+// --- C-Level Interrupt Handler with Corrected Logic ---
 void keyboard_handler(void) {
-    // Read the scancode from the keyboard's data port
-    uint8_t scancode = inb(0x60);
-    // --- Handle Key Releases ---
-    if (scancode & 0x80) { // The top bit is set on key release
-        scancode &= 0x7F; // Convert break code to make code
-        if (scancode == 0x2A || scancode == 0x36) { // Left or Right Shift released
-            shift_pressed = 0;
-        }
-        // We don't need to do anything else for other key releases
-        return;
+    uint8_t scancode = inb(KBD_DATA_PORT);
+
+    // 1. FIRST, check for the special 0xE0 prefix.
+    if (scancode == 0xE0) {
+        escape_state = 1;
+        return; // Exit and wait for the next byte.
     }
 
-    // --- Handle Key Presses ---
-
-    // Handle special multi-byte sequences for arrow keys, etc.
-    if (escape_state == 0) {
-        if (scancode == 0xE0) { // Special key code prefix
-            escape_state = 1;   // Set state to 1, not -1
-        } else {
-            // It's a normal key press
-            if (scancode < 128) {
-                char c;
-                if (shift_pressed) {
-                    c = scancode_map_shifted[scancode];
-                } else {
-                    c = scancode_map_base[scancode];
-                }
-
-                if (c != 0) {
-                    shell_handle_key(c);
-                } else if (scancode == 0x2A || scancode == 0x36) { // Left or Right Shift pressed
-                    shift_pressed = 1;
-                }
-            }
-        }
-    } else if (escape_state == 1) {
-        // We received 0xE0 last time, this is the actual key
+    // 2. If we are in the escape state, handle the second byte.
+    if (escape_state == 1) {
         switch (scancode) {
-            case 0x48:
-                // CHANGE: Added FG_YELLOW as the color argument. KEY_UP is now the third argument.
-                terminal_printf("[DEBUG: Sending KEY_UP with value 0x%x]\n", FG_YELLOW, KEY_UP);
-                shell_handle_key(KEY_UP);
-                 break;
+            case 0x48: shell_handle_key(KEY_UP); break;
             case 0x50: shell_handle_key(KEY_DOWN); break;
             case 0x4B: shell_handle_key(KEY_LEFT); break;
             case 0x4D: shell_handle_key(KEY_RIGHT); break;
         }
-        escape_state = 0; // Reset state after handling
+        escape_state = 0; // Reset state and we are done.
+        return;
+    }
+
+    // 3. If it's not a prefix, check for a key release.
+    if (scancode & 0x80) {
+        scancode &= 0x7F; // Convert break code to make code.
+        if (scancode == 0x2A || scancode == 0x36) { // L/R Shift released
+            shift_pressed = 0;
+        }
+        return; // Key release, do nothing more.
+    }
+
+    // 4. If we get here, it must be a normal key press.
+    if (scancode < 128) {
+        if (scancode == 0x2A || scancode == 0x36) { // L/R Shift pressed
+            shift_pressed = 1;
+        } else {
+            char c = shift_pressed ? scancode_map_shifted[scancode] : scancode_map_base[scancode];
+            if (c != 0) {
+                shell_handle_key(c);
+            }
+        }
     }
 }
 
-// Initializes the keyboard driver (does nothing for now)
+
+// --- Helper functions for PS/2 Controller ---
+static void kbd_wait_input() {
+    while (inb(KBD_STATUS_PORT) & 0x02);
+}
+static void kbd_wait_output() {
+    while (!(inb(KBD_STATUS_PORT) & 0x01));
+}
+
+// --- Keyboard Initialization ---
 void keyboard_init(void) {
+    kbd_wait_input();
+    outb(KBD_STATUS_PORT, 0x20);
+    kbd_wait_output();
+    uint8_t ccb = inb(KBD_DATA_PORT);
+    ccb |= (1 << 6) | (1 << 0);
+    kbd_wait_input();
+    outb(KBD_STATUS_PORT, 0x60);
+    kbd_wait_input();
+    outb(KBD_DATA_PORT, ccb);
+    while(inb(KBD_STATUS_PORT) & 0x01) {
+        inb(KBD_DATA_PORT);
+    }
 }
