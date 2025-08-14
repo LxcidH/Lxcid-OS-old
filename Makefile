@@ -57,7 +57,7 @@ $(BUILDDIR)/%.o: %.asm
 
 # --- Utility Rules ---
 run: all
-	qemu-system-i386 -kernel $(BUILDDIR)/kernel.bin
+	qemu-system-i386 -kernel $(BUILDDIR)/kernel.bin -hda fat_disk.img
 clean:
 	@echo "Cleaning build directory..."
 	$(RM) $(BUILDDIR)
