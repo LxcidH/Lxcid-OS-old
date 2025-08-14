@@ -1,5 +1,32 @@
 #include "string.h"
 
+int to_upper(int c) {
+    // Check if character is in the lowercase range 'a' through 'z'
+    if (c >= 'a' && c <= 'z') {
+        // Convert to uppercase by subtracting the difference between 'a' and 'A'
+        return c - 'a' + 'A';
+    }
+
+    // If not a lowercase letter, return it as is
+    return c;}
+
+void str_upper(char *str) {
+    // Return immediately if the pointer is null
+    if (!str) {
+        return;
+    }
+
+    // Loop until we hit the null terminator at the end of the string
+    while (*str) {
+        // Apply the toupper function to the current character
+        // The cast to (unsigned char) is for safety with character values > 127
+        *str = to_upper((unsigned char)*str);
+
+        // Move the ptr to the next char
+        str++;
+    }
+}
+
 int hex_to_int(const char* hex_str) {
     int result = 0;
     int i = 0;
@@ -34,6 +61,31 @@ int strcmp(const char* s1, const char* s2) {
         s1++;
         s2++;
     }
+    return *(const unsigned char*)s1 - *(const unsigned char*)s2;
+}
+
+int strncmp(const char* s1, const char* s2, size_t n) {
+    while (n > 0) {
+        // If the characters are different or we've hit a null terminator
+        // in s1, break out of the loop
+        if (*s1 != *s2 || *s1 == '\0') {
+            break;
+        }
+
+        // Move to the next characters
+        s1++;
+        s2++;
+        n--;
+    }
+
+    // If we've compared all n characters and found no differences
+    // the strings are equal for that length
+    if (n == 0) {
+        return 0;
+    }
+
+    // Return the difference between the first non-matching characters.
+    // Casting to uunsigned char is important for correct behaviour with characters outside the standard ASCII range
     return *(const unsigned char*)s1 - *(const unsigned char*)s2;
 }
 

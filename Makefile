@@ -13,7 +13,7 @@ BUILDDIR = build
 
 # --- Automatic Source File Discovery ---
 # This finds all .c and .asm files in the project directories.
-C_SOURCES = $(shell find src drivers idt io lib shell memory -name '*.c')
+C_SOURCES = $(shell find src drivers idt io lib shell memory fs -name '*.c')
 ASM_SOURCES = $(shell find src drivers idt io lib shell -name '*.asm')
 
 # --- Object Files ---
