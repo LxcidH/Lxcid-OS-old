@@ -2,6 +2,7 @@ section .text
 global outb
 global inb
 global insw
+global outsw
 
 ; outb; sends a byte to an I/O port
 ; stack: [esp+8]: data, [esp+4]: port
@@ -29,6 +30,20 @@ insw:
 
     cld                         ; Clear direction flag, to increment EDI
     rep insw                     ; Repeat CX times: read word from [DX] to [ES:EDI]
+
+    pop ebp
+    ret
+
+outsw:
+    push ebp
+    mov ebp, esp
+
+    mov edx, [ebp + 8]          ; Port to write to -> DX
+    mov esi, [ebp + 12]         ; Buffer address -> ESI (source)
+    mov ecx, [ebp + 16]         ; Count of words -> CX
+
+    cld
+    rep outsw
 
     pop ebp
     ret

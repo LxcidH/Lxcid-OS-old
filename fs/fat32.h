@@ -2,6 +2,7 @@
 #define FAT32_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef struct {
     // --- Standard BIOS Parameter block ---
@@ -60,9 +61,17 @@ typedef struct {
     uint32_t    file_size;          // Size of the file in bytes
 }__attribute__((packed)) FAT32_DirectoryEntry;
 
+typedef struct {
+    bool is_valid;
+    uint32_t lba;     // The LBA of the sector containing the free entry
+    uint32_t offset;  // The byte offset of the free entry within the sector
+} dir_entry_location_t;
+
 void fat32_init();
 
 void fat32_list_root_dir();
+
+bool fat32_create_file(const char* filename);
 
 static uint32_t fat32_get_next_cluster(uint32_t current_cluster);
 #endif

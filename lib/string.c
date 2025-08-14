@@ -8,7 +8,19 @@ int to_upper(int c) {
     }
 
     // If not a lowercase letter, return it as is
-    return c;}
+    return c;
+}
+
+int to_lower(int c) {
+    // Check if the character is in the uppercase range 'A' through 'Z'
+    if (c >= 'A' && c <= 'Z') {
+        // Convert to lowercase by adding the difference between 'a' and 'A'
+        return c + ('a' - 'A');
+    }
+
+    // If not an uppercase letter, return it as is
+    return c;
+}
 
 void str_upper(char *str) {
     // Return immediately if the pointer is null
@@ -23,6 +35,22 @@ void str_upper(char *str) {
         *str = to_upper((unsigned char)*str);
 
         // Move the ptr to the next char
+        str++;
+    }
+}
+
+void str_lower(char *str) {
+    // Return immediately if the pointer is null
+    if (!str) {
+        return;
+    }
+
+    // Loop until we hit the null terminator at the end of the string
+    while (*str) {
+        // Apply the to_lower function to the current character
+        *str = to_lower(*str);
+
+        // Move the pointer to the next character
         str++;
     }
 }

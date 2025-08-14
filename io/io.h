@@ -12,4 +12,6 @@ uint8_t inb(uint16_t port);
 // Reads 'count' 16-bit words from 'port' into 'addr'.
 void insw(uint16_t port, void* addr, uint32_t count);
 
+// Writes 'count' 16-bit words to 'port'
+void outsw(uint16_t port, void* addr, uint32_t count);
 #endif

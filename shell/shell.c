@@ -2,6 +2,7 @@
 #include "../lib/string.h"
 #include "../io/io.h"
 #include "../drivers/keyboard.h"
+#include "../fs/fat32.h"
 #include "../memory/pmm.h"
 // Forward declarations for command handlers (static cus they're internal)
 static void cmd_help(int argc, char* argv[]);
@@ -11,6 +12,9 @@ static void cmd_memmap(int argc, char* argv[]);
 static void cmd_clear(int argc, char* argv[]);
 static void cmd_peek(int argc, char* argv[]);
 static void cmd_poke(int argc, char* argv[]);
+static void cmd_mkfile(int argc, char* argv[]);
+static void cmd_ls(int argc, char* argv[]);
+static void cmd_rm(int argc, char* argv[]);
 
 // The command structure definition (internal)
 typedef struct {
@@ -27,7 +31,10 @@ static const shell_command_t commands[] = {
     {"memmap", cmd_memmap, "Prints the current memory usage and a memory map.\n"},
     {"clear", cmd_clear, "Clears the terminal.\n"},
     {"peek", cmd_peek, "Reads a 32-bit value from a memory address.\n"},
-    {"poke", cmd_poke, "Writes a 32-bit value to a memory address.\n"}
+    {"poke", cmd_poke, "Writes a 32-bit value to a memory address.\n"},
+    {"ls", cmd_ls, "Lists the files within the current directory.\n"},
+    {"mkfile", cmd_mkfile, "Creates a file in the current directory with the defined filename.\n"},
+    {"rm", cmd_rm, "Removes a file/directory.\n"}
 };
 static const int num_commands = sizeof(commands) / sizeof(shell_command_t);
 
@@ -233,6 +240,37 @@ static void cmd_poke(int argc, char* argv[]) {
     *ptr = value;   // Write the value to the address
 
     terminal_printf("Wrote 0x%x to address 0x%x\n", FG_MAGENTA, value, address);
+}
+
+static void cmd_ls(int argc, char* argv[]) {
+    (void)argc;
+    (void)argv;
+
+    fat32_list_root_dir();
+}
+
+static void cmd_mkfile(int argc, char* argv[]) {
+    if (argc < 2) {
+        terminal_printf("USAGE: mkfile <filename.extension>\n", FG_RED);
+        return;
+    }
+    if(fat32_create_file(argv[1])) {
+        terminal_printf("%s created!\n", FG_GREEN, argv[1]);
+    } else {
+        terminal_writeerror("%s couldn't be created!\n", argv[1]);
+    }
+}
+
+static void cmd_rm(int argc, char* argv[]) {
+    if (argc < 2) {
+        terminal_printf("USAGE: rm <filename.extension>\n", FG_RED);
+        return;
+    }
+    if (fat32_delete_file(argv[1])) {
+        terminal_printf("%s deleted!\n", FG_GREEN, argv[1]);
+    } else {
+        terminal_writeerror("File couldn't be deleted!\n");
+    }
 }
 
 // Command History definition

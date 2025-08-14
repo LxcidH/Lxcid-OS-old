@@ -21,7 +21,7 @@
 
 // Commands
 #define IDE_CMD_READ_SECTORS        0x20
-#define IDE_CMD_WRTIE_SECTORS       0x30
+#define IDE_CMD_WRITE_SECTORS       0x30
 
 // Helper func for the 400ns delay
 static void ide_400ns_delay() {
@@ -90,4 +90,23 @@ void ide_read_sectors(uint32_t lba, uint8_t count, uint8_t* buf) {
         ide_400ns_delay();
 
     }
+}
+
+void ide_write_sectors(uint32_t lba, uint8_t count, uint8_t* buf) {
+    ide_poll();
+    outb(IDE_DRIVE_HEAD_REG, 0xE0 | (uint8_t)(lba >> 24));
+        outb(IDE_SECTOR_COUNT_REG, count);
+    outb(IDE_LBA_LO_REG, (uint8_t)lba);
+    outb(IDE_LBA_MID_REG, (uint8_t)(lba >> 8));
+    outb(IDE_LBA_HI_REG, (uint8_t)(lba >> 16));
+    outb(IDE_COMMAND_REG, IDE_CMD_WRITE_SECTORS); // Command 0x30
+    ide_poll();
+
+    uint16_t* ptr = (uint16_t*)buf;
+    for (int i = 0; i < count; i++) {
+        outsw(IDE_DATA_REG, ptr, 256); // Use outsw
+        ptr += 256;
+    }
+
+    // FLUSH COMMAND NEEDED FOR REAL HARDWARE, QEMU IS FINE WITHOUT
 }

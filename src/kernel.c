@@ -7,6 +7,7 @@
 #include "../fs/fat32.h"
 #include "../shell/shell.h"
 #include "../memory/pmm.h"
+#include "../memory/heap.h"
 #include <stdint.h>
 
 // The kernel's main entry point
@@ -28,13 +29,16 @@ void kmain(multiboot_info_t* mbi) {
     idt_init();
     pic_remap();
     pmm_init(mbi); // Pass the multiboot info to the PMM
+    heap_init();
+    fat32_init();
     keyboard_init();
 
     terminal_welcome();
 
     asm volatile ("sti");
     shell_init();
-    fat32_init();
+
+    /*
     fat32_list_root_dir();
 
     FAT32_DirectoryEntry* file_entry = fat32_find_entry("HELLO.TXT");
@@ -52,8 +56,13 @@ void kmain(multiboot_info_t* mbi) {
     } else {
         terminal_printf("HELLO.TXT Not FOUND\n", FG_WHITE);
     }
-
+    */
     while(1) {
         asm volatile("hlt");
     }
 }
+
+// ADD ABILITY TO READ SUBDIRECTORIES NEXT
+// IMPLEMENT PATH TRAVERSAL
+// IMPLEMENT TEXT EDITOR
+

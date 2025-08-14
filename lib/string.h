@@ -3,7 +3,9 @@
 
 #include <stddef.h>
 int to_upper(int c);
+int to_lower(int c);
 void str_upper(char *str);
+void str_lower(char *str);
 int hex_to_int(const char* hex_str);
 int strcmp(const char* s1, const char* s2);
 int strncmp(const char* s1, const char* s2, size_t n);
