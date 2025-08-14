@@ -42,7 +42,7 @@ void pmm_init(multiboot_info_t* mbi) {
         }
         mmap = (multiboot_memory_map_t*)((uint32_t)mmap + mmap->size + sizeof(mmap->size));
     }
-    pmm_total_pages = highest_addr / 4096;
+    pmm_total_pages = highest_addr / PAGE_SIZE;
 
     // 2. Place the bitmap right after the kernel
     pmm_bitmap = (uint32_t*)&kernel_end;
@@ -59,15 +59,15 @@ void pmm_init(multiboot_info_t* mbi) {
     mmap = (multiboot_memory_map_t*)mbi->mmap_addr;
     while ((uint32_t)mmap < mbi->mmap_addr + mbi->mmap_length) {
         if (mmap->type == MULTIBOOT_MEMORY_AVAILABLE) {
-            for (uint64_t j = 0; j < mmap->len; j += 4096) {
-                pmm_clear_page((mmap->addr + j) / 4096);
+            for (uint64_t j = 0; j < mmap->len; j += PAGE_SIZE) {
+                pmm_clear_page((mmap->addr + j) / PAGE_SIZE);
             }
         }
         mmap = (multiboot_memory_map_t*)((uint32_t)mmap + mmap->size + sizeof(mmap->size));
     }
 
     // 5. Mark the kernel's and bitmap's own memory as USED
-    uint32_t reserved_pages = (((uint32_t)&kernel_end) + bitmap_size) / 4096 + 1;
+    uint32_t reserved_pages = (((uint32_t)&kernel_end) + bitmap_size) / PAGE_SIZE + 1;
     for (uint32_t i = 0; i < reserved_pages; i++) {
         pmm_set_page(i);
     }
@@ -81,7 +81,7 @@ void* pmm_alloc_page() {
                     uint32_t page_num = i * 32 + j;
                     pmm_set_page(page_num);
                     pmm_last_used_page = i;
-                    return (void*)(page_num * 4096);
+                    return (void*)(page_num * PAGE_SIZE);
                 }
             }
         }
@@ -90,7 +90,7 @@ void* pmm_alloc_page() {
 }
 
 void pmm_free_page(void* ptr) {
-    uint32_t page_num = (uint32_t)ptr / 4096;
+    uint32_t page_num = (uint32_t)ptr / PAGE_SIZE;
     pmm_clear_page(page_num);
 }
 

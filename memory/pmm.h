@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "../src/multiboot.h" // Include this for the multiboot_info_t struct
 
+#define PAGE_SIZE 4096
 // --- Public Function Prototypes ---
 
 // Correct signature for Multiboot
