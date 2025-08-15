@@ -3,7 +3,11 @@
 
 #include "../drivers/terminal.h"
 #include <stddef.h>
+#include "../lib/setjmp.h"
 
+extern jmp_buf g_shell_checkpoint;
+extern jmp_buf g_shell_checkpoint;
+extern uint32_t g_current_directory_cluster;
 // Initializes the shell
 void shell_init(void);
 

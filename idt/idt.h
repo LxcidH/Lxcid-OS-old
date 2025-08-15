@@ -23,14 +23,12 @@ struct idt_ptr_struct
 // This struct defines the data pushed onto the stack by our assembly stubs.
 // It must precisely match the order of registers pushed by 'pusha' and the
 // stack layout after an interrupt.
-struct registers
-{
-    uint32_t edi, esi, ebp, esp, ebx, edx, ecx, eax; // Pushed by 'pusha'.
-    uint32_t ds;                                    // Data segment selector.
-    uint32_t int_no, err_code;                      // Pushed by our ISR stub.
-    uint32_t eip, cs, eflags, useresp, ss;           // Pushed by the processor automatically.
-};
-
+typedef struct registers{
+    uint32_t ds;                                    // Pushed by our stub
+    uint32_t edi, esi, ebp, esp, ebx, edx, ecx, eax; // Pushed by 'pusha'
+    uint32_t int_no, err_code;                      // Pushed by the ISR macro
+    uint32_t eip, cs, eflags, useresp, ss;           // Pushed by the processor automatically
+} registers_t;
 // The main initialization function for the IDT.
 void idt_init(void);
 

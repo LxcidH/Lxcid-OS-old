@@ -199,3 +199,34 @@ char* itoa(int num, char* buffer, int base) {
 
     return buffer;
 }
+
+void* memcpy(void* dest, const void* src, size_t n) {
+    // Cast the generic pointers to char pointers to work with bytes
+    unsigned char* d = dest;
+    const unsigned char* s = src;
+
+    // Loop to copy n bytes
+    while (n--) {
+        *d++ = *s++;
+    }
+
+    // Return the original destination pointer
+    return dest;
+}
+
+/**
+ * Fills the first n bytes of the memory area pointed to by s
+ * with the constant byte c.
+ */
+void* memset(void* s, int c, size_t n) {
+    // Cast the generic pointer to a char pointer to work with bytes
+    unsigned char* p = s;
+
+    // Loop to set n bytes
+    while (n--) {
+        *p++ = (unsigned char)c;
+    }
+
+    // Return the original pointer
+    return s;
+}

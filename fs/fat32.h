@@ -4,28 +4,44 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+// --- Data Structures ---
+
+// A standard 32-byte FAT directory entry
 typedef struct {
-    // --- Standard BIOS Parameter block ---
+    char        name[11];           // Short filename in 8.3 format
+    uint8_t     attr;               // File attributes
+    uint8_t     nt_res;             // Reserved for use by Windows NT
+    uint8_t     crt_time_tenth;
+    uint16_t    crt_time;
+    uint16_t    crt_date;
+    uint16_t    lst_acc_date;
+    uint16_t    fst_clus_hi;        // High 16 bits of first cluster number
+    uint16_t    wrt_time;
+    uint16_t    wrt_date;
+    uint16_t    fst_clus_lo;        // Low 16 bits of first cluster number
+    uint32_t    file_size;
+} __attribute__((packed)) FAT32_DirectoryEntry;
+
+// The FAT32 BIOS Parameter Block (Boot Sector)
+typedef struct {
     uint8_t     jmp_boot[3];
     char        oem_name[8];
-    uint16_t    bytes_per_sec;      // Important! Usually 512
-    uint8_t     sec_per_clus;       // Important! Sectors in a cluster
-    uint16_t    rsvd_sec_cnt;       // Important! Size of reserved region
-    uint8_t     num_fats;           // Important! Usually 2
-    uint16_t    root_ent_cnt;       // (Not used in FAT32)
-    uint16_t    tot_sec16;          // (Not used in FAT32)
+    uint16_t    bytes_per_sec;
+    uint8_t     sec_per_clus;
+    uint16_t    rsvd_sec_cnt;
+    uint8_t     num_fats;
+    uint16_t    root_ent_cnt;
+    uint16_t    tot_sec16;
     uint8_t     media;
-    uint16_t    fat_sz16;           // (Not used in FAT32)
-    uint16_t    sec_per_trk;        // Sectors per track
+    uint16_t    fat_sz16;
+    uint16_t    sec_per_trk;
     uint16_t    num_heads;
     uint32_t    hidd_sec;
     uint32_t    tot_sec32;
-
-    // --- FAT32 Extended BIOS Param Block ---
-    uint32_t    fat_sz32;           // Important! Size of one FAT in sectors
+    uint32_t    fat_sz32;
     uint16_t    ext_flags;
     uint16_t    fs_ver;
-    uint32_t    root_clus;          // Important! Cluster of the root dir
+    uint32_t    root_clus;
     uint16_t    fs_info;
     uint16_t    bk_boot_sec;
     uint8_t     reserved[12];
@@ -34,8 +50,18 @@ typedef struct {
     uint8_t     boot_sig;
     uint32_t    vol_id;
     char        vol_lab[11];
-    char        fs_type[8];         //  Should say "Fat32   " Make sure to pad with spaces.
-}__attribute__((packed)) FAT32_BootSector;
+    char        fs_type[8];
+} __attribute__((packed)) FAT32_BootSector;
+
+// Holds the exact on-disk location of a directory entry
+typedef struct {
+    bool is_valid;
+    uint32_t lba;
+    uint32_t offset;
+} dir_entry_location_t;
+
+
+// --- Constants ---
 
 // File attribute flags for the 'attr' field
 #define ATTR_READ_ONLY      0x01
@@ -46,32 +72,41 @@ typedef struct {
 #define ATTR_ARCHIVE        0x20
 #define ATTR_LONG_FILE_NAME (ATTR_READ_ONLY | ATTR_HIDDEN | ATTR_SYSTEM | ATTR_VOLUME_ID)
 
-typedef struct {
-    char        name[11];           // Short filename in 8.3 format
-    uint8_t     attr;               // File attributes
-    uint8_t     nt_res;             // Reserved for use by window NT
-    uint8_t     crt_time_tenth;     // Tenths of a second stamp at file creation
-    uint16_t    crt_time;           // Time file was created
-    uint16_t    crt_date;           // Date file was created
-    uint16_t    lst_acc_date;       // Last access date
-    uint16_t    fst_clus_hi;        // High 16 bits of the file's first cluster number
-    uint16_t    wrt_time;           // Time of last write
-    uint16_t    wrt_date;           // Date of last write
-    uint16_t    fst_clus_lo;        // Low 16 bits of the file's first cluster number
-    uint32_t    file_size;          // Size of the file in bytes
-}__attribute__((packed)) FAT32_DirectoryEntry;
 
-typedef struct {
-    bool is_valid;
-    uint32_t lba;     // The LBA of the sector containing the free entry
-    uint32_t offset;  // The byte offset of the free entry within the sector
-} dir_entry_location_t;
+// --- Public Function Prototypes ---
 
+// Initializes the FAT32 driver
 void fat32_init();
 
-void fat32_list_root_dir();
+// Converts a cluster number to its starting LBA sector address
+uint32_t cluster_to_lba(uint32_t cluster);
 
-bool fat32_create_file(const char* filename);
+// Returns the cluster number of the root directory
+uint32_t fat32_get_root_cluster(void);
 
-static uint32_t fat32_get_next_cluster(uint32_t current_cluster);
-#endif
+// Lists the contents of a directory
+void fat32_list_dir(uint32_t start_cluster);
+
+// Reads the full contents of a file
+void fat32_read_file(FAT32_DirectoryEntry* entry, uint8_t* out_buffer);
+
+// Creates a new empty file in the specified directory
+bool fat32_create_file(const char* filename, uint32_t parent_cluster);
+
+// Deletes a file from the specified directory
+bool fat32_delete_file(const char* filename, uint32_t parent_cluster);
+
+// Creates a new empty subdirectory
+bool fat32_create_directory(const char* dirname, uint32_t parent_cluster);
+
+// Deletes an empty subdirectory
+bool fat32_delete_directory(const char* dirname, uint32_t parent_cluster);
+
+// Converts a raw 11-byte FAT name to a user-friendly string
+void fat_name_to_string(const char fat_name[11], char* out_name);
+FAT32_DirectoryEntry* fat32_find_entry(const char* filename, uint32_t start_cluster);
+bool fat32_delete_directory(const char* dirname, uint32_t parent_cluster);
+
+
+
+#endif // FAT32_H

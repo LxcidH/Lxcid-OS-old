@@ -3,7 +3,12 @@
 #include "../io/io.h"
 #include "../drivers/keyboard.h"
 #include "../fs/fat32.h"
+#include "../lib/math.h"
 #include "../memory/pmm.h"
+
+jmp_buf g_shell_checkpoint;
+uint32_t g_current_directory_cluster;
+
 // Forward declarations for command handlers (static cus they're internal)
 static void cmd_help(int argc, char* argv[]);
 static void cmd_echo(int argc, char* argv[]);
@@ -13,8 +18,11 @@ static void cmd_clear(int argc, char* argv[]);
 static void cmd_peek(int argc, char* argv[]);
 static void cmd_poke(int argc, char* argv[]);
 static void cmd_mkfile(int argc, char* argv[]);
+static void cmd_mkdir(int argc, char* argv[]);
 static void cmd_ls(int argc, char* argv[]);
 static void cmd_rm(int argc, char* argv[]);
+static void cmd_cd(int argc, char* argv[]);
+static void cmd_run(int argc, char* argv[]);
 
 // The command structure definition (internal)
 typedef struct {
@@ -34,7 +42,10 @@ static const shell_command_t commands[] = {
     {"poke", cmd_poke, "Writes a 32-bit value to a memory address.\n"},
     {"ls", cmd_ls, "Lists the files within the current directory.\n"},
     {"mkfile", cmd_mkfile, "Creates a file in the current directory with the defined filename.\n"},
-    {"rm", cmd_rm, "Removes a file/directory.\n"}
+    {"mkdir", cmd_mkdir, "Creates a directory at the specified location.\n"},
+    {"rm", cmd_rm, "Removes a file/directory.\n"},
+    {"cd", cmd_cd, "Changes directory to the specified path!\n"},
+    {"run", cmd_run, "Runs a binary file!\n"}
 };
 static const int num_commands = sizeof(commands) / sizeof(shell_command_t);
 
@@ -243,10 +254,8 @@ static void cmd_poke(int argc, char* argv[]) {
 }
 
 static void cmd_ls(int argc, char* argv[]) {
-    (void)argc;
-    (void)argv;
-
-    fat32_list_root_dir();
+    // This function now ignores argc and argv for simplicity
+    fat32_list_dir(g_current_directory_cluster);
 }
 
 static void cmd_mkfile(int argc, char* argv[]) {
@@ -254,8 +263,20 @@ static void cmd_mkfile(int argc, char* argv[]) {
         terminal_printf("USAGE: mkfile <filename.extension>\n", FG_RED);
         return;
     }
-    if(fat32_create_file(argv[1])) {
+    if(fat32_create_file(argv[1], g_current_directory_cluster)) {
         terminal_printf("%s created!\n", FG_GREEN, argv[1]);
+    } else {
+        terminal_writeerror("%s couldn't be created!\n", argv[1]);
+    }
+}
+
+static void cmd_mkdir(int argc, char* argv[]) {
+    if (argc < 2) {
+        terminal_printf("USAGE: mkdir <dirname>\n", FG_RED);
+        return;
+    }
+    if (fat32_create_directory(argv[1], g_current_directory_cluster)) {
+        terminal_printf("%s created successfully!\n", FG_GREEN, argv[1]);
     } else {
         terminal_writeerror("%s couldn't be created!\n", argv[1]);
     }
@@ -264,12 +285,89 @@ static void cmd_mkfile(int argc, char* argv[]) {
 static void cmd_rm(int argc, char* argv[]) {
     if (argc < 2) {
         terminal_printf("USAGE: rm <filename.extension>\n", FG_RED);
+        terminal_printf("USAGE 2: rm -rf <dirname>\n", FG_RED);
         return;
     }
-    if (fat32_delete_file(argv[1])) {
-        terminal_printf("%s deleted!\n", FG_GREEN, argv[1]);
+    if (argc == 2) {
+        if (fat32_delete_file(argv[1], g_current_directory_cluster)) {
+            terminal_printf("%s deleted!\n", FG_GREEN, argv[1]);
+        } else {
+            terminal_writeerror("File couldn't be deleted!\n");
+        }
+    }
+    if (argc > 2 && strcmp(argv[1], "-rf") == 0) {
+        if (fat32_delete_directory(argv[2], g_current_directory_cluster)) {
+            terminal_printf("<DIR> '%s' was deleted!\n", FG_GREEN, argv[2]);
+        }
+    }
+}
+
+static void cmd_cd(int argc, char* argv[]) {
+    if (argc < 2) {
+        g_current_directory_cluster = fat32_get_root_cluster();
+        return;
+    }
+
+    const char* dirname = argv[1];
+    FAT32_DirectoryEntry* entry = fat32_find_entry(dirname, g_current_directory_cluster);
+
+    if (entry == NULL) {
+        terminal_printf("Error: Directory '%s' not found.\n", FG_RED, dirname);
+        return;
+    }
+    if (!(entry->attr & ATTR_DIRECTORY)) {
+        terminal_printf("Error: '%s' is not a directory.\n", FG_RED, dirname);
+        return;
+    }
+
+    uint32_t new_cluster = (entry->fst_clus_hi << 16) | entry->fst_clus_lo;
+
+    // The root's parent is cluster 0, so we reset to the actual root cluster
+    if (new_cluster == 0) {
+        g_current_directory_cluster = fat32_get_root_cluster();
     } else {
-        terminal_writeerror("File couldn't be deleted!\n");
+        g_current_directory_cluster = new_cluster;
+    }
+}
+
+void cmd_run(int argc, char* argv[]) {
+    if (argc < 2) {
+        terminal_printf("USAGE: run <program.bin>\n", FG_RED);
+        return;
+    }
+
+    FAT32_DirectoryEntry* program = fat32_find_entry(argv[1], g_current_directory_cluster);
+    if (program == NULL) {
+        terminal_printf("Error: Program '%s' not found.\n", FG_RED, argv[1]);
+        return;
+    }
+
+    // --- THIS IS THE FIX ---
+    // Allocate space for the file's content PLUS ONE for the null terminator.
+    uint8_t* pMemory = 0x150000;
+    // -------------------------
+    terminal_printf("%x\n", FG_YELLOW, pMemory);
+terminal_printf("DEBUG: Program bytes: %x %x %x %x...\n", FG_YELLOW, pMemory[0], pMemory[1], pMemory[2], pMemory[3]);
+    if (pMemory == NULL) {
+        terminal_writeerror("No available memory!\n");
+        return;
+    }
+
+    // Read the file into the allocated memory
+    fat32_read_file(program, pMemory);
+
+    // Now it is safe to add the null terminator
+    pMemory[program->file_size] = '\0';
+
+    // Create a function pointer and execute
+    void (*program_entry)(void) = (void (*)())pMemory;
+
+    if (setjmp(g_shell_checkpoint) == 0) {
+        terminal_printf("Executing '%s'...\n", FG_MAGENTA, argv[1]);
+        program_entry();
+    } else {
+        free(pMemory);
+        terminal_printf("Program '%s' has finished and memory has been freed.\n", FG_MAGENTA, argv[1]);
     }
 }
 
@@ -332,6 +430,7 @@ static void shell_redraw_line(void) {
 
 void shell_init(void) {
     buffer_index = 0;
+    g_current_directory_cluster = fat32_get_root_cluster();
     terminal_writestring(PROMPT, FG_MAGENTA); // Inital prompt
 }
 

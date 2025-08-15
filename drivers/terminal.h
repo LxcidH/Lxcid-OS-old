@@ -43,7 +43,7 @@ void terminal_writestring(const char* data, uint8_t color);
 
 void terminal_printf(const char* format, uint8_t color, ...);
 
-void terminal_writeerror(const char* data, ...);
+void terminal_writeerror(const char* format, ...);
 
 void terminal_welcome();
 

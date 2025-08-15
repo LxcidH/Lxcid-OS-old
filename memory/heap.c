@@ -32,9 +32,13 @@ void* malloc(size_t size) {
                 block_header_t *new_block = (block_header_t*)((uint8_t*)current + sizeof(block_header_t) + size);
                 new_block->size = current->size - size - sizeof(block_header_t);
                 new_block->is_free = true;
+
+                // Fix: The new block's next pointer should point to the block that was originally
+                // after the 'current' block.
                 new_block->next = current->next;
 
                 current->size = size;
+                // Fix: The current block's next pointer should point to the new block.
                 current->next = new_block;
             }
 
@@ -48,7 +52,6 @@ void* malloc(size_t size) {
     // TODO: No suitable block found. need to expand the heap by calling pmm_alloc_page()
     // and adding the new memoryt to the end of the list. FOr now, we fail/
     return NULL;
-
 }
 
 void free(void* ptr) {

@@ -5,7 +5,7 @@
 
 ; This is the single C function that will handle all interrupts.
 extern c_interrupt_handler
-
+extern syscall_handler
 ; A macro to create an ISR stub for exceptions with no error code.
 %macro ISR_NO_ERR_CODE 1
     global isr%1
@@ -47,12 +47,12 @@ common_handler_stub:
     mov fs, ax
     mov gs, ax
 
-    mov eax, esp    ; Push a pointer to the registers struct.
-    push eax
+    mov eax, esp    ; Get a pointer to the registers struct on the stack
+    push eax        ; Push pointer as an argument for the C handler
 
     call c_interrupt_handler ; Call our unified C handler.
 
-    pop eax         ; Pop the pointer.
+    add esp, 4      ; Clean up the pointer argument from the stack.
 
     pop eax         ; Restore the original data segment.
     mov ds, ax
@@ -62,9 +62,8 @@ common_handler_stub:
 
     popa            ; Restore general-purpose registers.
     add esp, 8      ; Clean up the pushed error code and interrupt number.
-    sti             ; Re-enable interrupts.
-    iret            ; Return from interrupt.
-
+    ; NO 'sti' here!
+    iret            ; Atomically restore state and return from interrupt.
 
 ; =========================================================================
 ;                      MUST INCLUDE ALL DEFINITIONS!
@@ -103,6 +102,7 @@ ISR_NO_ERR_CODE 28
 ISR_NO_ERR_CODE 29
 ISR_ERR_CODE    30
 ISR_NO_ERR_CODE 31
+ISR_NO_ERR_CODE 128 ; This is 0x80, for system calls
 
 ; --- Generate all 16 IRQ stubs (Hardware Interrupts 32-47) ---
 IRQ 0, 32

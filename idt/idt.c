@@ -2,6 +2,8 @@
 #include "../drivers/terminal.h"
 #include "../drivers/pic.h"
 #include "../drivers/keyboard.h"
+#include "../src/syscall.h"
+#include "interrupts.h"
 
 // --- Structs (defined in idt.h, but good to remember their layout) ---
 // struct idt_entry_struct idt_entries[256];
@@ -18,6 +20,7 @@ extern void isr16(); extern void isr17(); extern void isr18(); extern void isr19
 extern void isr20(); extern void isr21(); extern void isr22(); extern void isr23();
 extern void isr24(); extern void isr25(); extern void isr26(); extern void isr27();
 extern void isr28(); extern void isr29(); extern void isr30(); extern void isr31();
+extern void isr128(void);
 
 extern void irq0(); extern void irq1(); extern void irq2(); extern void irq3();
 extern void irq4(); extern void irq5(); extern void irq6(); extern void irq7();
@@ -62,6 +65,9 @@ void c_interrupt_handler(struct registers* regs) {
     if (regs->int_no < 32) {
         // It's a CPU exception.
         fault_handler(regs);
+    } else if (regs->int_no == 128) {
+        // It's a system call, so pass the registers to the syscall handler
+        syscall_handler(regs);
     } else {
         // It's a hardware interrupt (IRQ).
         irq_handler(regs);
@@ -118,6 +124,8 @@ void idt_init(void) {
     for (int i = 0; i < 16; i++) {
         idt_set_gate(32 + i, (uint32_t)irq_routines[i], 0x08, 0x8E);
     }
+
+    idt_set_gate(0x80, (uint32_t)isr128, 0x08, 0x8E);
 
     // Load the IDT using the assembly instruction.
     idt_load(&idt_ptr);

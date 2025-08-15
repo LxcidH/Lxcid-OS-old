@@ -89,9 +89,64 @@ void* pmm_alloc_page() {
     return 0; // Out of memory
 }
 
+/**
+ * Allocates a specified number of contiguous physical pages.
+ * Note: This is a simple implementation and does not check for contiguity.
+ * A more advanced PMM would be needed for guaranteed contiguous blocks.
+ *
+ * @param count The number of pages to allocate.
+ * @return A pointer to the start of the allocated memory block, or NULL if allocation fails.
+ */
+void* pmm_alloc_pages(size_t count) {
+    if (count == 0) {
+        return NULL;
+    }
+
+    // Allocate the first page to get a starting address
+    void* start_ptr = pmm_alloc_page();
+    if (start_ptr == NULL) {
+        return NULL; // Out of memory
+    }
+
+    // Allocate the remaining pages
+    for (size_t i = 1; i < count; i++) {
+        // In a simple PMM, calling this repeatedly will likely get
+        // contiguous pages, but it's not guaranteed.
+        if (pmm_alloc_page() == NULL) {
+            // This is a problem: we allocated some pages but couldn't get all of them.
+            // A real OS would need to free the pages we already allocated.
+            // For now, we'll just fail and accept the memory leak.
+            return NULL;
+        }
+    }
+
+    return start_ptr;
+}
+
 void pmm_free_page(void* ptr) {
     uint32_t page_num = (uint32_t)ptr / PAGE_SIZE;
     pmm_clear_page(page_num);
+}
+
+/**
+ * Frees a specified number of contiguous physical pages.
+ *
+ * @param ptr A pointer to the start of the memory block to free.
+ * @param count The number of pages to free.
+ */
+void pmm_free_pages(void* ptr, size_t count) {
+    if (count == 0 || ptr == NULL) {
+        return;
+    }
+
+    // Loop 'count' times, freeing one page at a time
+    for (size_t i = 0; i < count; i++) {
+        // Calculate the address of the current page to free
+        void* page_to_free = (void*)((uint8_t*)ptr + (i * PAGE_SIZE));
+
+        // Call your existing single-page free function
+        pmm_free_page(page_to_free);
+    }
 }
 
 uint32_t pmm_get_total_pages(void) {
