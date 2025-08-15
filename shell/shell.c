@@ -5,6 +5,7 @@
 #include "../fs/fat32.h"
 #include "../lib/math.h"
 #include "../memory/pmm.h"
+#include "../memory/heap.h"
 
 jmp_buf g_shell_checkpoint;
 uint32_t g_current_directory_cluster;
@@ -180,11 +181,13 @@ static void cmd_memmap(int argc, char* argv[]) {
     uint32_t total_mb = total_pages * 4 / 1024;
     uint32_t used_mb = used_pages * 4 / 1024;
     uint32_t free_mb = free_pages * 4 / 1024;
+    uint32_t heap_mb = HEAP_SIZE_PAGES * 4 / 1024;
 
     terminal_printf("Physical Memory Usage:\n", FG_MAGENTA);
     terminal_printf("  Total: %d pages (%d MB)\n", FG_WHITE, total_pages, total_mb);
     terminal_printf("  Used:  %d pages (%d MB)\n", FG_RED, used_pages, used_mb);
     terminal_printf("  Free:  %d pages (%d MB)\n", FG_GREEN, free_pages, free_mb);
+    terminal_printf("  Heap:  %d pages (%d MB)\n", FG_GREEN, HEAP_SIZE_PAGES, heap_mb);
     terminal_printf("\nMemory Map (1 char = 512KB | 128 pages):\n", FG_MAGENTA);
 
     int pages_per_char = 128; // 1MB worth of 4KB pages
@@ -235,7 +238,7 @@ static void cmd_peek(int argc, char* argv[]) {
     uint32_t* ptr = (uint32_t*)address;
     uint32_t value = *ptr;
 
-    terminal_printf("Value at 0x%x: 0x%x\n", FG_MAGENTA, address, value);
+    terminal_printf("Value at %x: %x\n", FG_MAGENTA, address, value);
 }
 
 static void cmd_poke(int argc, char* argv[]) {
@@ -346,8 +349,6 @@ void cmd_run(int argc, char* argv[]) {
     // Allocate space for the file's content PLUS ONE for the null terminator.
     uint8_t* pMemory = 0x150000;
     // -------------------------
-    terminal_printf("%x\n", FG_YELLOW, pMemory);
-terminal_printf("DEBUG: Program bytes: %x %x %x %x...\n", FG_YELLOW, pMemory[0], pMemory[1], pMemory[2], pMemory[3]);
     if (pMemory == NULL) {
         terminal_writeerror("No available memory!\n");
         return;
@@ -367,7 +368,6 @@ terminal_printf("DEBUG: Program bytes: %x %x %x %x...\n", FG_YELLOW, pMemory[0],
         program_entry();
     } else {
         free(pMemory);
-        terminal_printf("Program '%s' has finished and memory has been freed.\n", FG_MAGENTA, argv[1]);
     }
 }
 
@@ -431,7 +431,7 @@ static void shell_redraw_line(void) {
 void shell_init(void) {
     buffer_index = 0;
     g_current_directory_cluster = fat32_get_root_cluster();
-    terminal_writestring(PROMPT, FG_MAGENTA); // Inital prompt
+    terminal_printf("%s - %s >", FG_MAGENTA, PROMPT, g_current_directory_cluster); // Inital prompt
 }
 
 void shell_handle_key(int c) {
@@ -443,7 +443,6 @@ void shell_handle_key(int c) {
 
         // Calculate the index of the OLDEST command in the circular buffer.
         int oldest_index = (history_head - history_count + HISTORY_MAX_SIZE) % HISTORY_MAX_SIZE;
-
         if (history_current == -1) {
             // If we weren't in history mode, start by showing the NEWEST command.
             history_current = (history_head - 1 + HISTORY_MAX_SIZE) % HISTORY_MAX_SIZE;

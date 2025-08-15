@@ -40,8 +40,6 @@ void fat32_init() {
     g_fat_start_lba = g_boot_sector.rsvd_sec_cnt;
     g_data_start_lba = g_fat_start_lba + (g_boot_sector.num_fats * g_boot_sector.fat_sz32);
     g_fat_ready = true;
-
-    terminal_printf("FAT32 initialized. Root cluster at: %d\n", FG_GREEN, g_boot_sector.root_clus);
 }
 
 uint32_t cluster_to_lba(uint32_t cluster) {
@@ -72,7 +70,10 @@ void fat32_list_dir(uint32_t start_cluster) {
             fat_name_to_string(entries[i].name, readable_name);
 
             if (entries[i].attr & ATTR_DIRECTORY) {
-                terminal_printf("<DIR>  %s\n", FG_WHITE, readable_name);
+                if(!strcmp(readable_name, ".") == 0 && !strcmp(readable_name, "..") == 0) {
+                    terminal_printf("<DIR>  %s\n", FG_WHITE, readable_name);
+                }
+
             } else {
                 terminal_printf("       %s\n", FG_WHITE, readable_name);
             }

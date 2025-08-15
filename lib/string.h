@@ -25,6 +25,8 @@ int strlen(const char* str);
  */
 char* strcpy(char* dest, const char* src);
 
+char* strcat(char* dest, const char* src);
+
 char* itoa(int num, char* buffer, int base);
 
 void* memcpy(void* dest, const void* src, size_t n);

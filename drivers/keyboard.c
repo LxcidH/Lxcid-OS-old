@@ -31,10 +31,9 @@ const char scancode_map_shifted[128] = {
 static int escape_state = 0;
 static int shift_pressed = 0;
 
-
 // --- C-Level Interrupt Handler with Corrected Logic ---
 void keyboard_handler(void) {
-    uint8_t scancode = inb(KBD_DATA_PORT);
+uint8_t scancode = inb(KBD_DATA_PORT);
 
     // 1. FIRST, check for the special 0xE0 prefix.
     if (scancode == 0xE0) {

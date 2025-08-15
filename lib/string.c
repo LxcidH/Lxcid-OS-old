@@ -156,6 +156,27 @@ static void reverse(char* str, int length) {
     }
 }
 
+char* strcat(char* dest, const char* src) {
+    char* orig_dest = dest;
+
+    // Find the end of the destination string
+    while (*dest != '\0') {
+        dest++;
+    }
+
+    // Copy the src str to the end of dest string
+    while (*src != '\0') {
+        *dest = *src;
+        dest++;
+        src++;
+    }
+
+    // Add the null terminator back
+    *dest = '\0';
+
+    return orig_dest;
+}
+
 /**
  * @brief Converts an integer to a null-terminated string (itoa).
  * @param num The integer to convert.

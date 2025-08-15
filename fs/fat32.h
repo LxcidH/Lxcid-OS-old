@@ -90,6 +90,8 @@ void fat32_list_dir(uint32_t start_cluster);
 // Reads the full contents of a file
 void fat32_read_file(FAT32_DirectoryEntry* entry, uint8_t* out_buffer);
 
+void fat32_write_file(FAT32_DirectoryEntry* entry);
+
 // Creates a new empty file in the specified directory
 bool fat32_create_file(const char* filename, uint32_t parent_cluster);
 

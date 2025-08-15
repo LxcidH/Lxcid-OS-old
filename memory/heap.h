@@ -5,6 +5,10 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+#define HEAP_SIZE_PAGES 1024
+#define TOTAL_HEAP_SIZE HEAP_SIZE_PAGES * PAGE_SIZE
+
+
 typedef struct block_header {
     size_t size;                    // Size of the data block (excluding this header)
     bool is_free;                   // Flag to indicate if the block is free
