@@ -20,19 +20,23 @@ static inline uint16_t vga_entry(unsigned char uc, uint8_t color) {
 }
 
 /**
- * @brief Sets the hardware cursor's position using VGA I/O ports.
+ * @brief Sets the hardware cursor's position AND updates the driver's
+ * internal state to match.
  */
 void terminal_set_cursor(size_t x, size_t y) {
+    // Update the driver's internal state
+    terminal_column = x;
+    terminal_row = y;
+
+    // Update the hardware cursor
     uint16_t pos = y * VGA_WIDTH + x;
 
-    // Send the high byte of the position to register 0x0E
-    outb(0x3D4, 0x0E);
+    outb(0x3D4, 0x0E); // Send the high byte of the position
     outb(0x3D5, (uint8_t)((pos >> 8) & 0xFF));
-
-    // Send the low byte of the position to register 0x0F
-    outb(0x3D4, 0x0F);
+    outb(0x3D4, 0x0F); // Send the low byte of the position
     outb(0x3D5, (uint8_t)(pos & 0xFF));
 }
+
 
 // Initialises the terminal by clearing it and setting up the state
 void terminal_initialize(void) {
@@ -202,3 +206,8 @@ void terminal_writedec(uint32_t n) {
         terminal_putchar(' ', FG_WHITE);
     }
 }
+
+size_t terminal_get_row(void) {
+    return terminal_row;
+}
+

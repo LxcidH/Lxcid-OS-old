@@ -65,6 +65,7 @@ common_handler_stub:
     ; NO 'sti' here!
     iret            ; Atomically restore state and return from interrupt.
 
+
 ; =========================================================================
 ;                      MUST INCLUDE ALL DEFINITIONS!
 ; =========================================================================

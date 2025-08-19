@@ -47,4 +47,6 @@ void terminal_writeerror(const char* format, ...);
 
 void terminal_welcome();
 
+size_t terminal_get_row(void);
+
 #endif

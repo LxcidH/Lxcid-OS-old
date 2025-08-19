@@ -61,8 +61,7 @@ void kmain(multiboot_info_t* mbi) {
         asm volatile("hlt");
     }
 }
-
-// ADD ABILITY TO READ SUBDIRECTORIES NEXT
-// IMPLEMENT PATH TRAVERSAL
+// RE-ADD SYSCALL
 // IMPLEMENT TEXT EDITOR
+
 

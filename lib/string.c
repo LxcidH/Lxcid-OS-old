@@ -251,3 +251,35 @@ void* memset(void* s, int c, size_t n) {
     // Return the original pointer
     return s;
 }
+
+/**
+ * @brief Copies 'n' bytes from memory area 'src' to memory area 'dest'.
+ * @details The memory areas may overlap; the copy is always done in a
+ * non-destructive manner.
+ * @param dest Pointer to the destination array.
+ * @param src  Pointer to the source array.
+ * @param n    The number of bytes to be copied.
+ * @return A pointer to the destination, which is 'dest'.
+ */
+void* memmove(void* dest, const void* src, size_t n) {
+    // Cast the void pointers to char pointers to work with bytes
+    char* d = (char*)dest;
+    const char* s = (const char*)src;
+
+    // If the buffers don't overlap, or if the destination is before the source,
+    // we can copy from start to finish (a forward copy).
+    if (d <= s || d >= s + n) {
+        for (size_t i = 0; i < n; i++) {
+            d[i] = s[i];
+        }
+    }
+    // Otherwise, the destination overlaps and is after the source.
+    // We must copy from end to start to avoid overwriting data we need to read.
+    else {
+        for (size_t i = n; i > 0; i--) {
+            d[i - 1] = s[i - 1];
+        }
+    }
+
+    return dest;
+}

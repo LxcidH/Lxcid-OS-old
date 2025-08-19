@@ -51,11 +51,13 @@ static const shell_command_t commands[] = {
 static const int num_commands = sizeof(commands) / sizeof(shell_command_t);
 
 #define CMD_BUFFER_SIZE 256
-#define PROMPT "LxcidOS >"
+#define PROMPT "LxcidOS > "
 #define MAX_ARGS 16
 
 static char cmd_buffer[CMD_BUFFER_SIZE];
 static size_t buffer_index = 0;
+static size_t cursor_pos = 0;
+static size_t last_buffer_len = 0;
 
 /**
  * @brief Parses a command string into arguments (argc/argv).
@@ -398,112 +400,109 @@ static void shell_history_add(const char* command) {
 }
 
 // Redraws the current command line
-static void shell_redraw_line(void) {
-    // 1. Move cursor to the start of the line (after the prompt)
-    for (size_t i = 0; i < buffer_index; i++) {
-        terminal_putchar('\b', FG_WHITE);
+static void shell_redraw_line() {
+    size_t prompt_len = strlen(PROMPT);
+    size_t start_row = terminal_get_row();
+
+    // 1. Move cursor to the start of the command
+    terminal_set_cursor(prompt_len, start_row);
+
+    // 2. Write the current buffer
+    terminal_writestring(cmd_buffer, FG_WHITE);
+
+    // 3. If the new buffer is SHORTER than the last one, clear the difference
+    if (buffer_index < last_buffer_len) {
+        for (size_t i = 0; i < last_buffer_len - buffer_index; i++) {
+            terminal_putchar(' ', FG_WHITE);
+        }
     }
 
-    // 2. Clear the old line by printing spaces
-    for (size_t i = 0; i < buffer_index; i++) {
-        terminal_putchar(' ', FG_WHITE);
-    }
+    // 4. Update the last known length for the next redraw
+    last_buffer_len = buffer_index;
 
-    // 3. Move cursor back to the start again
-    for (size_t i = 0; i < buffer_index; i++) {
-        terminal_putchar('\b', FG_WHITE);
-    }
-
-    // 4. Copy the new command into our buffer and print it
-        if (history_current == -1) {
-        // If we're not in history mode, just clear the buffer.
-        cmd_buffer[0] = '\0';
-    } else {
-        // Otherwise, copy the command from history.
-        strcpy(cmd_buffer, history_buffer[history_current]);
-    }
-
-    // Update the buffer index and print the new line.
-    buffer_index = strlen(cmd_buffer);
-    terminal_writestring(cmd_buffer, FG_WHITE);;
+    // 5. Move the hardware cursor to the correct final position
+    terminal_set_cursor(prompt_len + cursor_pos, start_row);
 }
+
 
 void shell_init(void) {
     buffer_index = 0;
     g_current_directory_cluster = fat32_get_root_cluster();
-    terminal_printf("%s - %s >", FG_MAGENTA, PROMPT, g_current_directory_cluster); // Inital prompt
+    terminal_printf("%s", FG_MAGENTA, PROMPT); // Inital prompt
 }
 
-void shell_handle_key(int c) {
-    if (c == KEY_UP) {
-        if (history_count == 0) {
-            // Nothing in history, so do nothing.
-            return;
-        }
+void shell_handle_key(int key) {
+    switch (key) {
+        case KEY_UP:
+            // PASTE YOUR EXISTING 'KEY_UP' LOGIC FOR COMMAND HISTORY HERE.
+            // After you load a command from history, you must update the state:
+            // buffer_index = strlen(cmd_buffer);
+            // cursor_pos = buffer_index;
+            // Then call shell_redraw_line();
+            break;
 
-        // Calculate the index of the OLDEST command in the circular buffer.
-        int oldest_index = (history_head - history_count + HISTORY_MAX_SIZE) % HISTORY_MAX_SIZE;
-        if (history_current == -1) {
-            // If we weren't in history mode, start by showing the NEWEST command.
-            history_current = (history_head - 1 + HISTORY_MAX_SIZE) % HISTORY_MAX_SIZE;
-            shell_redraw_line();
-        } else if (history_current != oldest_index) {
-            // If we are not at the oldest command yet, move to the previous (older) one.
-            history_current = (history_current - 1 + HISTORY_MAX_SIZE) % HISTORY_MAX_SIZE;
-            shell_redraw_line();
-        }
-        // If we are already at the oldest command, do nothing.
-        return;
-    }
+        case KEY_DOWN:
+            // PASTE YOUR EXISTING 'KEY_DOWN' LOGIC FOR COMMAND HISTORY HERE.
+            // After you load a command from history, you must update the state:
+            // buffer_index = strlen(cmd_buffer);
+            // cursor_pos = buffer_index;
+            // Then call shell_redraw_line();
+            break;
 
-    if (c == KEY_DOWN) {
-        if (history_current == -1) {
-            // If we are not in history mode, do nothing.
-            return;
-        }
+        case KEY_LEFT:
+            if (cursor_pos > 0) {
+                cursor_pos--;
+                terminal_set_cursor(strlen(PROMPT) + cursor_pos, terminal_get_row());
+            }
+            break;
 
-        // Move to the next (newer) command.
-        history_current = (history_current + 1) % HISTORY_MAX_SIZE;
+        case KEY_RIGHT:
+            if (cursor_pos < buffer_index) {
+                cursor_pos++;
+                terminal_set_cursor(strlen(PROMPT) + cursor_pos, terminal_get_row());
+            }
+            break;
 
-        if (history_current == history_head) {
-            // If we've reached the "end" of the history (the empty slot after the newest command),
-            // exit history mode and clear the line.
-            history_current = -1;
+        case '\b': // Backspace
+            if (cursor_pos > 0) {
+                // Shift buffer contents from the cursor position left by one
+                memmove(&cmd_buffer[cursor_pos - 1], &cmd_buffer[cursor_pos], buffer_index - cursor_pos);
+                buffer_index--;
+                cursor_pos--;
+                cmd_buffer[buffer_index] = '\0'; // Re-apply null terminator
+                shell_redraw_line();
+            }
+            break;
+
+        case '\n': // Enter
+            cmd_buffer[buffer_index] = '\0';
+            terminal_putchar('\n', FG_WHITE);
+
+            if (buffer_index > 0) {
+                shell_history_add(cmd_buffer);
+                process_command(cmd_buffer);
+            }
+
+            // Reset state for the next command
+            buffer_index = 0;
+            cursor_pos = 0;
+            last_buffer_len = 0; // ADD THIS LINE
             cmd_buffer[0] = '\0';
-            shell_redraw_line();
-        } else {
-            // Otherwise, just show the newer command.
-            shell_redraw_line();
-        }
-        return;
-    }
+            terminal_printf(PROMPT, FG_MAGENTA);
+            break; // Use break if you changed from 'return'
 
-    // Handle backspace
-    if (c == '\b') {
-        if (buffer_index > 0) {
-            buffer_index--;
-            terminal_putchar('\b', FG_WHITE);
-        }
-        return;
-    }
+        default: // Printable character
+            if (key >= 32 && key <= 126 && buffer_index < CMD_BUFFER_SIZE - 1) {
+                // Shift buffer contents from the cursor position right by one to make space
+                memmove(&cmd_buffer[cursor_pos + 1], &cmd_buffer[cursor_pos], buffer_index - cursor_pos);
 
-    // Handle Enter key
-    if (c == '\n') {
-        cmd_buffer[buffer_index] = '\0'; // Null-terminate the command
-        terminal_putchar('\n', FG_WHITE);
-
-        shell_history_add(cmd_buffer);
-
-        process_command(cmd_buffer);
-
-        buffer_index = 0;
-        terminal_writestring("LxcidOS > ", FG_MAGENTA);
-        return;
-    }
-
-    // Handle all other characters
-    if (buffer_index < CMD_BUFFER_SIZE - 1) {
-        cmd_buffer[buffer_index++] = c;
-        terminal_putchar(c, FG_WHITE);    // Echo char to screen
+                // Insert the new character
+                cmd_buffer[cursor_pos] = (char)key;
+                buffer_index++;
+                cursor_pos++;
+                cmd_buffer[buffer_index] = '\0'; // Re-apply null terminator
+                shell_redraw_line();
+            }
+            break;
     }
 }
