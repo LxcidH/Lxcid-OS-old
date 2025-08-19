@@ -9,7 +9,8 @@
 
 jmp_buf g_shell_checkpoint;
 uint32_t g_current_directory_cluster;
-
+#define MAX_PATH_LENGTH 256
+char g_current_path[MAX_PATH_LENGTH] = "root"; // Start at the root;
 // Forward declarations for command handlers (static cus they're internal)
 static void cmd_help(int argc, char* argv[]);
 static void cmd_echo(int argc, char* argv[]);
@@ -124,7 +125,7 @@ static void cmd_help(int argc, char* argv[]) {
     terminal_printf("List of available commands:\n", FG_MAGENTA);
     for(int i = 0; i < num_commands; i++) {
         // CHANGE: Pass the 'name' member of the struct, not the whole struct.
-        terminal_printf("  %s - %s\n", FG_WHITE, commands[i].name, commands[i].help_text);
+        terminal_printf("  %s - %s", FG_WHITE, commands[i].name, commands[i].help_text);
     }
 }
 
@@ -310,10 +311,38 @@ static void cmd_rm(int argc, char* argv[]) {
 static void cmd_cd(int argc, char* argv[]) {
     if (argc < 2) {
         g_current_directory_cluster = fat32_get_root_cluster();
+        strcpy(g_current_path, "/"); // Reset path to root
         return;
     }
 
     const char* dirname = argv[1];
+terminal_printf("Current cluster: %d\n", FG_WHITE, g_current_directory_cluster);
+    // --- HANDLE ".." FIRST ---
+    if (strcmp(dirname, "..") == 0) {
+        // If we are already at the root, do nothing.
+        if (g_current_directory_cluster == fat32_get_root_cluster()) {
+            return;
+        }
+
+        // Get the parent directory's cluster
+        uint32_t parent_cluster = fat32_get_parent_cluster(g_current_directory_cluster);
+        if (parent_cluster != g_current_directory_cluster) {
+            g_current_directory_cluster = parent_cluster;
+
+            // Find the last slash to truncate the path string
+            char* last_slash = strrchr(g_current_path, '/');
+            if (last_slash) {
+                *last_slash = '\0';
+                if (strlen(g_current_path) == 0) {
+                    strcpy(g_current_path, "/");
+                }
+            }
+        }
+        terminal_printf("New cluster: %d\n", FG_WHITE, g_current_directory_cluster);
+        return;
+    }
+
+    // --- THEN HANDLE NORMAL DIRECTORY CHANGES ---
     FAT32_DirectoryEntry* entry = fat32_find_entry(dirname, g_current_directory_cluster);
 
     if (entry == NULL) {
@@ -327,12 +356,18 @@ static void cmd_cd(int argc, char* argv[]) {
 
     uint32_t new_cluster = (entry->fst_clus_hi << 16) | entry->fst_clus_lo;
 
-    // The root's parent is cluster 0, so we reset to the actual root cluster
-    if (new_cluster == 0) {
-        g_current_directory_cluster = fat32_get_root_cluster();
-    } else {
-        g_current_directory_cluster = new_cluster;
+    // Check if the directory is already the current one
+    if (new_cluster == g_current_directory_cluster) {
+        return;
     }
+
+    g_current_directory_cluster = new_cluster;
+
+    // Append the new directory name to the path
+    if (strcmp(g_current_path, "/") != 0) {
+        strcat(g_current_path, "/");
+    }
+    strcat(g_current_path, dirname);
 }
 
 void cmd_run(int argc, char* argv[]) {
@@ -395,7 +430,7 @@ static void shell_history_add(const char* command) {
 
 // Redraws the current command line
 static void shell_redraw_line() {
-    size_t prompt_len = strlen(PROMPT);
+    size_t prompt_len = strlen("LxcidOS |  >") + strlen(g_current_path);
     size_t start_row = terminal_get_row();
 
     // 1. Move cursor to the start of the command
@@ -422,7 +457,7 @@ static void shell_redraw_line() {
 void shell_init(void) {
     buffer_index = 0;
     g_current_directory_cluster = fat32_get_root_cluster();
-    terminal_printf("%s", FG_MAGENTA, PROMPT); // Inital prompt
+    terminal_printf("LxcidOS | %s >", FG_MAGENTA, g_current_path); // Inital prompt
 }
 
 void shell_handle_key(int key) {
@@ -468,14 +503,14 @@ void shell_handle_key(int key) {
         case KEY_LEFT:
             if (cursor_pos > 0) {
                 cursor_pos--;
-                terminal_set_cursor(strlen(PROMPT) + cursor_pos, terminal_get_row());
+                terminal_set_cursor(strlen("LxcidOS |  >") + strlen(g_current_path) + cursor_pos, terminal_get_row());
             }
             break;
 
         case KEY_RIGHT:
             if (cursor_pos < buffer_index) {
                 cursor_pos++;
-                terminal_set_cursor(strlen(PROMPT) + cursor_pos, terminal_get_row());
+                terminal_set_cursor(strlen("LxcidOS |  >") + strlen(g_current_path) + cursor_pos, terminal_get_row());
             }
             break;
 
@@ -504,7 +539,7 @@ void shell_handle_key(int key) {
             cursor_pos = 0;
             last_buffer_index = 0; // ADD THIS LINE
             cmd_buffer[0] = '\0';
-            terminal_printf(PROMPT, FG_MAGENTA);
+            terminal_printf("LxcidOS | %s >", FG_MAGENTA, g_current_path);
             break; // Use break if you changed from 'return'
 
         default: // Printable character
@@ -522,5 +557,3 @@ void shell_handle_key(int key) {
             break;
     }
 }
-
-

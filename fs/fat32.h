@@ -105,7 +105,7 @@ bool fat32_create_directory(const char* dirname, uint32_t parent_cluster);
 
 // Deletes an empty directory.
 bool fat32_delete_directory(const char* dirname, uint32_t parent_cluster);
-
+uint32_t fat32_get_parent_cluster(uint32_t cluster);
 // Converts a standard 8.3 FAT filename to a readable string.
 void fat_name_to_string(const char fat_name[11], char* out_name);
 

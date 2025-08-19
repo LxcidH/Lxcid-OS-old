@@ -39,30 +39,10 @@ void kmain(multiboot_info_t* mbi) {
 
     shell_init();
 
-    /*
-    fat32_list_root_dir();
-
-    FAT32_DirectoryEntry* file_entry = fat32_find_entry("HELLO.TXT");
-    if (file_entry != NULL) {
-        terminal_printf("Found HELLO.TXT! Size: %d bytes\n", FG_MAGENTA, file_entry->file_size);
-
-        // Allocate a buffer and read the file
-        uint8_t* buffer = (uint8_t*)malloc(file_entry->file_size);
-        fat32_read_file(file_entry, buffer);
-
-        // Print the content to verify
-        terminal_printf("Content: %s\n", FG_GREEN, (char*)buffer);
-
-        free(buffer);
-    } else {
-        terminal_printf("HELLO.TXT Not FOUND\n", FG_WHITE);
-    }
-    */
     while(1) {
         asm volatile("hlt");
     }
 }
-// RE-ADD SYSCALL
 // IMPLEMENT TEXT EDITOR
 
 

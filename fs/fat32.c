@@ -2,8 +2,11 @@
 #include "../drivers/ide.h"
 #include "../drivers/terminal.h"
 #include "../lib/string.h"
+#include "../memory/heap.h"
 #include <stddef.h>
 #include <stdbool.h>
+
+uint32_t fat32_read_directory(uint32_t cluster, FAT32_DirectoryEntry entries[], uint32_t max_entries);
 
 // A struct to hold cached filesystem information for easy access.
 typedef struct {
@@ -33,6 +36,9 @@ static uint32_t fat32_find_free_cluster();
 static dir_entry_location_t find_free_directory_entry(uint32_t start_cluster);
 static bool fat32_find_entry_by_name(const char* filename, uint32_t start_cluster, dir_entry_location_t* out_loc, FAT32_DirectoryEntry* out_entry);
 static void to_fat32_filename(const char* filename, char* out_name);
+
+// A constant for the number of entries per sector
+#define ENTRIES_PER_SECTOR (g_bytes_per_sector / sizeof(FAT32_DirectoryEntry))
 
 
 // --- Public API Functions ---
@@ -450,4 +456,61 @@ bool fat32_delete_directory(const char* dirname, uint32_t parent_cluster) {
     ide_write_sectors(loc.lba, 1, g_cluster_buffer);
 
     return true;
+}
+
+/**
+ * @brief Reads all directory entries from a given cluster into a buffer.
+ *
+ * @param cluster The starting cluster of the directory.
+ * @param entries An array to store the read directory entries.
+ * @param max_entries The maximum number of entries the array can hold.
+ * @return The number of entries successfully read.
+ */
+uint32_t fat32_get_parent_cluster(uint32_t cluster) {
+    // If we're already at the root, the parent is the root.
+    if (cluster == g_fat32_fs_info.root_cluster_num) {
+        return g_fat32_fs_info.root_cluster_num;
+    }
+
+    // Allocate a temporary buffer for one cluster
+    uint32_t cluster_size_bytes = g_fat32_fs_info.sectors_per_cluster * g_fat32_fs_info.bytes_per_sector;
+    uint8_t* buffer = malloc(cluster_size_bytes);
+    if (buffer == NULL) {
+        return 0; // Or an error code
+    }
+
+    // Read the current directory's cluster
+    uint32_t start_sector = g_fat32_fs_info.first_data_sector + (cluster - 2) * g_fat32_fs_info.sectors_per_cluster;
+    ide_read_sectors(start_sector, g_fat32_fs_info.sectors_per_cluster, buffer);
+
+    // Get the directory entries
+    FAT32_DirectoryEntry* entries = (FAT32_DirectoryEntry*)buffer;
+
+    // Check the first entry ('.')
+    if (strncmp(entries[0].name, ".          ", 11) != 0 || !(entries[0].attr & ATTR_DIRECTORY)) {
+        // This is not a valid directory, something is wrong
+        free(buffer);
+        return 0;
+    }
+
+    // The '..' entry is always the second one
+    FAT32_DirectoryEntry* dotdot_entry = &entries[1];
+
+    if (strncmp(dotdot_entry->name, "..         ", 11) != 0 || !(dotdot_entry->attr & ATTR_DIRECTORY)) {
+        // The second entry is not the '..' directory, return an error
+        free(buffer);
+        return 0;
+    }
+
+    // Extract and return the parent cluster number
+    uint32_t parent_cluster = (dotdot_entry->fst_clus_hi << 16) | dotdot_entry->fst_clus_lo;
+
+    // The root directory's '..' entry's cluster is 0. If we read that,
+    // we should return the real root cluster instead.
+    if (parent_cluster == 0) {
+        parent_cluster = g_fat32_fs_info.root_cluster_num;
+    }
+
+    free(buffer);
+    return parent_cluster;
 }

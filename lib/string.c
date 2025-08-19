@@ -178,6 +178,30 @@ char* strcat(char* dest, const char* src) {
 }
 
 /**
+ * @brief Locates the last occurrence of a character in a string.
+ *
+ * @param s The string to be searched.
+ * @param c The character to be located.
+ * @return A pointer to the last occurrence of the character, or NULL if not found.
+ */
+char* strrchr(const char* s, int c) {
+    const char* last_occurrence = NULL;
+
+    // Iterate through the string until the null terminator is found.
+    // The loop also checks the null terminator itself,
+    // which is important because strrchr considers the null terminator as part of the string.
+    do {
+        // If the current character matches the target character,
+        // update our pointer to the last found occurrence.
+        if (*s == (char)c) {
+            last_occurrence = s;
+        }
+    } while (*s++ != '\0'); // Increment s to move to the next character
+
+    return (char*)last_occurrence;
+}
+
+/**
  * @brief Converts an integer to a null-terminated string (itoa).
  * @param num The integer to convert.
  * @param buffer The buffer to store the resulting string.
