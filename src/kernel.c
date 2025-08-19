@@ -36,6 +36,7 @@ void kmain(multiboot_info_t* mbi) {
     terminal_welcome();
 
     asm volatile ("sti");
+
     shell_init();
 
     /*

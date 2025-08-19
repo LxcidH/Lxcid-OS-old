@@ -13,5 +13,5 @@ void shell_init(void);
 
 // Handles a key press from the keyboard driver
 void shell_handle_key(int c);
-
+void shell_main_loop(void);
 #endif

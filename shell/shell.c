@@ -57,7 +57,7 @@ static const int num_commands = sizeof(commands) / sizeof(shell_command_t);
 static char cmd_buffer[CMD_BUFFER_SIZE];
 static size_t buffer_index = 0;
 static size_t cursor_pos = 0;
-static size_t last_buffer_len = 0;
+static size_t last_buffer_index = 0;
 
 /**
  * @brief Parses a command string into arguments (argc/argv).
@@ -337,7 +337,7 @@ static void cmd_cd(int argc, char* argv[]) {
 
 void cmd_run(int argc, char* argv[]) {
     if (argc < 2) {
-        terminal_printf("USAGE: run <program.bin>\n", FG_RED);
+        terminal_printf("USAGE: run <program.bin> [args...]\n", FG_RED);
         return;
     }
 
@@ -347,29 +347,23 @@ void cmd_run(int argc, char* argv[]) {
         return;
     }
 
-    // --- THIS IS THE FIX ---
-    // Allocate space for the file's content PLUS ONE for the null terminator.
-    uint8_t* pMemory = 0x150000;
-    // -------------------------
-    if (pMemory == NULL) {
-        terminal_writeerror("No available memory!\n");
-        return;
-    }
-
-    // Read the file into the allocated memory
+    uint8_t* pMemory = (uint8_t*)0x150000;
     fat32_read_file(program, pMemory);
 
-    // Now it is safe to add the null terminator
-    pMemory[program->file_size] = '\0';
+    // --- THE FIX ---
+    // 1. Define the function pointer with the correct arguments (argc, argv)
+    void (*program_entry)(int, char**) = (void (*)(int, char**))pMemory;
 
-    // Create a function pointer and execute
-    void (*program_entry)(void) = (void (*)())pMemory;
+    // 2. Prepare the arguments for the new program
+    int program_argc = argc - 1;
+    char** program_argv = &argv[1]; // Shift the argument list over by one
 
     if (setjmp(g_shell_checkpoint) == 0) {
         terminal_printf("Executing '%s'...\n", FG_MAGENTA, argv[1]);
-        program_entry();
+        // 3. Call the program and pass the new arguments
+        program_entry(program_argc, program_argv);
     } else {
-        free(pMemory);
+        terminal_printf("Program finished, returning to shell.\n", FG_GREEN);
     }
 }
 
@@ -411,14 +405,14 @@ static void shell_redraw_line() {
     terminal_writestring(cmd_buffer, FG_WHITE);
 
     // 3. If the new buffer is SHORTER than the last one, clear the difference
-    if (buffer_index < last_buffer_len) {
-        for (size_t i = 0; i < last_buffer_len - buffer_index; i++) {
+    if (buffer_index < last_buffer_index) {
+        for (size_t i = 0; i < last_buffer_index - buffer_index; i++) {
             terminal_putchar(' ', FG_WHITE);
         }
     }
 
     // 4. Update the last known length for the next redraw
-    last_buffer_len = buffer_index;
+    last_buffer_index = buffer_index;
 
     // 5. Move the hardware cursor to the correct final position
     terminal_set_cursor(prompt_len + cursor_pos, start_row);
@@ -434,19 +428,41 @@ void shell_init(void) {
 void shell_handle_key(int key) {
     switch (key) {
         case KEY_UP:
-            // PASTE YOUR EXISTING 'KEY_UP' LOGIC FOR COMMAND HISTORY HERE.
-            // After you load a command from history, you must update the state:
-            // buffer_index = strlen(cmd_buffer);
-            // cursor_pos = buffer_index;
-            // Then call shell_redraw_line();
+            if (history_count > 0) {
+                if (history_current == -1) {
+                    // If not in history mode, start with the newest command
+                    history_current = (history_head - 1 + HISTORY_MAX_SIZE) % HISTORY_MAX_SIZE;
+                } else {
+                    // Move to the previous (older) command
+                    int oldest_index = (history_head - history_count + HISTORY_MAX_SIZE) % HISTORY_MAX_SIZE;
+                    if (history_current != oldest_index) {
+                        history_current = (history_current - 1 + HISTORY_MAX_SIZE) % HISTORY_MAX_SIZE;
+                    }
+                }
+                // Copy history to buffer and update state
+                strcpy(cmd_buffer, history_buffer[history_current]);
+                buffer_index = strlen(cmd_buffer);
+                cursor_pos = buffer_index;
+                shell_redraw_line();
+            }
             break;
 
         case KEY_DOWN:
-            // PASTE YOUR EXISTING 'KEY_DOWN' LOGIC FOR COMMAND HISTORY HERE.
-            // After you load a command from history, you must update the state:
-            // buffer_index = strlen(cmd_buffer);
-            // cursor_pos = buffer_index;
-            // Then call shell_redraw_line();
+            if (history_current != -1) {
+                // Move to the next (newer) command
+                history_current = (history_current + 1) % HISTORY_MAX_SIZE;
+                if (history_current == history_head) {
+                    // Reached the end, exit history mode
+                    history_current = -1;
+                    cmd_buffer[0] = '\0';
+                } else {
+                    strcpy(cmd_buffer, history_buffer[history_current]);
+                }
+                // Update state and redraw
+                buffer_index = strlen(cmd_buffer);
+                cursor_pos = buffer_index;
+                shell_redraw_line();
+            }
             break;
 
         case KEY_LEFT:
@@ -486,7 +502,7 @@ void shell_handle_key(int key) {
             // Reset state for the next command
             buffer_index = 0;
             cursor_pos = 0;
-            last_buffer_len = 0; // ADD THIS LINE
+            last_buffer_index = 0; // ADD THIS LINE
             cmd_buffer[0] = '\0';
             terminal_printf(PROMPT, FG_MAGENTA);
             break; // Use break if you changed from 'return'
@@ -506,3 +522,5 @@ void shell_handle_key(int key) {
             break;
     }
 }
+
+
