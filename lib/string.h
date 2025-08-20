@@ -27,6 +27,7 @@ char* strcpy(char* dest, const char* src);
 
 char* strcat(char* dest, const char* src);
 char* strrchr(const char* s, int c);
+char* strchr(const char* str, int c);
 char* itoa(int num, char* buffer, int base);
 
 void* memcpy(void* dest, const void* src, size_t n);
@@ -34,5 +35,5 @@ void* memcpy(void* dest, const void* src, size_t n);
 void* memset(void* s, int c, size_t n);
 
 void* memmove(void* dest, const void* src, size_t n);
-
+char* strtok(char* str, const char* delim);
 #endif

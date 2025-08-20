@@ -33,15 +33,15 @@ static int shift_pressed = 0;
 
 // --- C-Level Interrupt Handler with Corrected Logic ---
 void keyboard_handler(void) {
-uint8_t scancode = inb(KBD_DATA_PORT);
+    uint8_t scancode = inb(KBD_DATA_PORT);
 
-    // 1. FIRST, check for the special 0xE0 prefix.
+    // 1. Check for the special 0xE0 prefix (for arrow keys, etc.)
     if (scancode == 0xE0) {
         escape_state = 1;
-        return; // Exit and wait for the next byte.
+        return; // Wait for the next byte.
     }
 
-    // 2. If we are in the escape state, handle the second byte.
+    // 2. Handle the second byte of an escape sequence.
     if (escape_state == 1) {
         switch (scancode) {
             case 0x48: shell_handle_key(KEY_UP); break;
@@ -49,23 +49,25 @@ uint8_t scancode = inb(KBD_DATA_PORT);
             case 0x4B: shell_handle_key(KEY_LEFT); break;
             case 0x4D: shell_handle_key(KEY_RIGHT); break;
         }
-        escape_state = 0; // Reset state and we are done.
+        escape_state = 0; // Reset state.
         return;
     }
 
-    // 3. If it's not a prefix, check for a key release.
+    // 3. Ignore key releases, except for shift.
     if (scancode & 0x80) {
-        scancode &= 0x7F; // Convert break code to make code.
+        scancode &= 0x7F;
         if (scancode == 0x2A || scancode == 0x36) { // L/R Shift released
             shift_pressed = 0;
         }
-        return; // Key release, do nothing more.
+        return;
     }
 
-    // 4. If we get here, it must be a normal key press.
+    // 4. Handle normal key presses.
     if (scancode < 128) {
         if (scancode == 0x2A || scancode == 0x36) { // L/R Shift pressed
             shift_pressed = 1;
+        } else if (scancode == 0x0F) { // --- THIS IS THE NEW PART --- Tab key pressed
+            shell_handle_key(KEY_TAB);
         } else {
             char c = shift_pressed ? scancode_map_shifted[scancode] : scancode_map_base[scancode];
             if (c != 0) {

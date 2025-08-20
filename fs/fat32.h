@@ -95,18 +95,20 @@ FAT32_DirectoryEntry* fat32_find_entry(const char* filename, uint32_t start_clus
 FAT32_DirectoryEntry* fat32_find_entry_by_cluster(uint32_t cluster_to_find);
 
 // Creates a new empty file.
-bool fat32_create_file(const char* filename, uint32_t parent_cluster);
+bool fat32_create_file(const char* filename, uint32_t parent_cluster, dir_entry_location_t* out_loc);
 
 // Deletes a file.
 bool fat32_delete_file(const char* filename, uint32_t parent_cluster);
-
+bool fat32_find_entry_by_name(const char* filename, uint32_t start_cluster, dir_entry_location_t* out_loc, FAT32_DirectoryEntry* out_entry);
 // Creates a new empty directory.
 bool fat32_create_directory(const char* dirname, uint32_t parent_cluster);
-
+bool fat32_update_entry(FAT32_DirectoryEntry* entry, dir_entry_location_t* loc);
 // Deletes an empty directory.
 bool fat32_delete_directory(const char* dirname, uint32_t parent_cluster);
 uint32_t fat32_get_parent_cluster(uint32_t cluster);
 // Converts a standard 8.3 FAT filename to a readable string.
 void fat_name_to_string(const char fat_name[11], char* out_name);
+bool fat32_write_file(FAT32_DirectoryEntry* entry, const void* buffer, uint32_t size);
+bool fat32_copy_file(const char* source_name, uint32_t source_dir_cluster, const char* dest_name, uint32_t dest_dir_cluster);
 
 #endif // FAT32_H

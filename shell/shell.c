@@ -24,6 +24,7 @@ static void cmd_mkdir(int argc, char* argv[]);
 static void cmd_ls(int argc, char* argv[]);
 static void cmd_rm(int argc, char* argv[]);
 static void cmd_cd(int argc, char* argv[]);
+static void cmd_cp(int argc, char* argv[]);
 static void cmd_run(int argc, char* argv[]);
 
 // The command structure definition (internal)
@@ -47,13 +48,18 @@ static const shell_command_t commands[] = {
     {"mkdir", cmd_mkdir, "Creates a directory at the specified location.\n"},
     {"rm", cmd_rm, "Removes a file/directory.\n"},
     {"cd", cmd_cd, "Changes directory to the specified path!\n"},
-    {"run", cmd_run, "Runs a binary file!\n"}
+    {"cp", cmd_cp, "Copies a file to another path."},
+    {"run", cmd_run, "Runs a binary file!\n"},
 };
 static const int num_commands = sizeof(commands) / sizeof(shell_command_t);
 
 #define CMD_BUFFER_SIZE 256
 #define PROMPT "LxcidOS > "
 #define MAX_ARGS 16
+
+#define MAX_CMD_LEN 256
+static char cmd_buffer[MAX_CMD_LEN];
+static int cmd_len = 0;
 
 static char cmd_buffer[CMD_BUFFER_SIZE];
 static size_t buffer_index = 0;
@@ -268,8 +274,8 @@ static void cmd_mkfile(int argc, char* argv[]) {
     if (argc < 2) {
         terminal_printf("USAGE: mkfile <filename.extension>\n", FG_RED);
         return;
-    }
-    if(fat32_create_file(argv[1], g_current_directory_cluster)) {
+    }dir_entry_location_t new_file_loc;
+    if(fat32_create_file(argv[1], g_current_directory_cluster, &new_file_loc)) {
         terminal_printf("%s created!\n", FG_GREEN, argv[1]);
     } else {
         terminal_writeerror("%s couldn't be created!\n", argv[1]);
@@ -316,7 +322,6 @@ static void cmd_cd(int argc, char* argv[]) {
     }
 
     const char* dirname = argv[1];
-terminal_printf("Current cluster: %d\n", FG_WHITE, g_current_directory_cluster);
     // --- HANDLE ".." FIRST ---
     if (strcmp(dirname, "..") == 0) {
         // If we are already at the root, do nothing.
@@ -338,7 +343,6 @@ terminal_printf("Current cluster: %d\n", FG_WHITE, g_current_directory_cluster);
                 }
             }
         }
-        terminal_printf("New cluster: %d\n", FG_WHITE, g_current_directory_cluster);
         return;
     }
 
@@ -368,6 +372,65 @@ terminal_printf("Current cluster: %d\n", FG_WHITE, g_current_directory_cluster);
         strcat(g_current_path, "/");
     }
     strcat(g_current_path, dirname);
+    return;
+}
+
+static void cmd_cp(int argc, char* argv[]) {
+    if (argc < 3) {
+        terminal_printf("USAGE: cp <source> <dest>\n", FG_RED);
+        return;
+    }
+
+    // 1. Find the source file entry.
+    FAT32_DirectoryEntry* source_entry = fat32_find_entry(argv[1], g_current_directory_cluster);
+    if (source_entry == NULL) {
+        terminal_printf("Error: Source file '%s' not found.\n", FG_RED, argv[1]);
+        return;
+    }
+
+    // 2. Read the source file's content into a buffer.
+    void* buffer = malloc(source_entry->file_size);
+    if (buffer == NULL) {
+        terminal_printf("Error: Memory allocation failed.\n", FG_RED);
+        return;
+    }
+    fat32_read_file(source_entry, buffer);
+
+    // 3. Create the destination file on disk and get its location.
+    dir_entry_location_t dest_loc;
+    if (!fat32_create_file(argv[2], g_current_directory_cluster, &dest_loc)) {
+        free(buffer);
+        return;
+    }
+
+    // 4. Create a LOCAL directory entry struct on the stack.
+    FAT32_DirectoryEntry dest_entry_struct;
+
+    // 5. Find the newly created entry on disk and copy its data into our local struct.
+    // We use the more detailed `fat32_find_entry_by_name` here.
+    if (!fat32_find_entry_by_name(argv[2], g_current_directory_cluster, NULL, &dest_entry_struct)) {
+        terminal_printf("Error: Could not find newly created destination file.\n", FG_RED);
+        free(buffer);
+        return;
+    }
+
+    // 6. Write the data to the file. This will modify our LOCAL struct (`dest_entry_struct`)
+    // with the new file size and starting cluster.
+    bool success = fat32_write_file(&dest_entry_struct, buffer, source_entry->file_size);
+
+    // 7. CRITICAL STEP: Write the updated LOCAL struct back to the disk at the correct location.
+    if (success) {
+        if (fat32_update_entry(&dest_entry_struct, &dest_loc)) {
+            terminal_printf("File copied successfully.\n", FG_GREEN);
+        } else {
+            terminal_printf("Error: Failed to update directory entry on disk.\n", FG_RED);
+        }
+    } else {
+        terminal_printf("Error: Failed to write file data.\n", FG_RED);
+    }
+
+    // 8. Clean up the buffer.
+    free(buffer);
 }
 
 void cmd_run(int argc, char* argv[]) {
@@ -400,7 +463,11 @@ void cmd_run(int argc, char* argv[]) {
     } else {
         terminal_printf("Program finished, returning to shell.\n", FG_GREEN);
     }
+    return;
 }
+
+
+
 
 // Command History definition
 #define HISTORY_MAX_SIZE 16 // Store the last 16 commands
@@ -452,7 +519,6 @@ static void shell_redraw_line() {
     // 5. Move the hardware cursor to the correct final position
     terminal_set_cursor(prompt_len + cursor_pos, start_row);
 }
-
 
 void shell_init(void) {
     buffer_index = 0;

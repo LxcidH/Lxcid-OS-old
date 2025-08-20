@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-#define HEAP_SIZE_PAGES 1024
+#define HEAP_SIZE_PAGES 2048
 #define TOTAL_HEAP_SIZE HEAP_SIZE_PAGES * PAGE_SIZE
 
 

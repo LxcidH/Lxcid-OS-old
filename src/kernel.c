@@ -43,6 +43,7 @@ void kmain(multiboot_info_t* mbi) {
         asm volatile("hlt");
     }
 }
+// Fix the issue with cp command not being able to copy non-empty files
 // IMPLEMENT TEXT EDITOR
 
 

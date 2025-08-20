@@ -202,6 +202,28 @@ char* strrchr(const char* s, int c) {
 }
 
 /**
+ * @brief Locates the first occurrence of a character in a string.
+ *
+ * @param str The string to be scanned.
+ * @param c The character to be searched for.
+ * @return A pointer to the first occurrence of the character c in the string str,
+ * or NULL if the character is not found.
+ */
+char* strchr(const char* str, int c) {
+    while (*str != '\0') {
+        if (*str == (char)c) {
+            return (char*)str;
+        }
+        str++;
+    }
+    // Check for the null terminator as well, as per the C standard.
+    if (c == '\0') {
+        return (char*)str;
+    }
+    return NULL;
+}
+
+/**
  * @brief Converts an integer to a null-terminated string (itoa).
  * @param num The integer to convert.
  * @param buffer The buffer to store the resulting string.
@@ -306,4 +328,76 @@ void* memmove(void* dest, const void* src, size_t n) {
     }
 
     return dest;
+}
+
+/**
+ * @brief A pointer to save the position between subsequent calls to strtok.
+ *
+ * The 'static' keyword is crucial here. It means this variable retains its
+ * value across multiple calls to the function. This is how strtok "remembers"
+ * where it left off in the string.
+ */
+static char* next_token = NULL;
+
+/**
+ * @brief Parses a string into a sequence of tokens.
+ *
+ * On the first call, `strtok` should be called with the string to be parsed.
+ * In subsequent calls, the first argument should be NULL.
+ *
+ * @param str The string to be tokenized, or NULL to continue from the last position.
+ * @param delim A string containing the delimiter characters.
+ * @return A pointer to the next token, or NULL if no more tokens are found.
+ *
+ * @warning This function is destructive! It writes null-terminators ('\0')
+ * into the input string to separate tokens.
+ */
+char* strtok(char* str, const char* delim) {
+    char* token_start;
+    char* current_char;
+
+    // --- 1. Determine where to start searching ---
+    // If str is not NULL, this is a new tokenizing session.
+    // Otherwise, continue from where we last left off.
+    if (str != NULL) {
+        next_token = str;
+    }
+
+    // If next_token is NULL, it means we've reached the end of the string.
+    if (next_token == NULL || *next_token == '\0') {
+        return NULL;
+    }
+
+    // --- 2. Skip leading delimiters ---
+    // Move the start of our token past any initial delimiter characters.
+    token_start = next_token;
+    while (*token_start != '\0' && strchr(delim, *token_start) != NULL) {
+        token_start++;
+    }
+
+    // If we've hit the end of the string after skipping delimiters, there are no more tokens.
+    if (*token_start == '\0') {
+        next_token = token_start; // Ensure next call returns NULL
+        return NULL;
+    }
+
+    // --- 3. Find the end of the current token ---
+    // Move forward until we find a delimiter or the end of the string.
+    current_char = token_start;
+    while (*current_char != '\0' && strchr(delim, *current_char) == NULL) {
+        current_char++;
+    }
+
+    // --- 4. Terminate the token and save the next position ---
+    // If we found a delimiter, replace it with a null terminator and
+    // set `next_token` to the character immediately after it.
+    if (*current_char != '\0') {
+        *current_char = '\0';
+        next_token = current_char + 1;
+    } else {
+        // We reached the end of the string, so there are no more tokens after this one.
+        next_token = current_char;
+    }
+
+    return token_start;
 }
