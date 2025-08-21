@@ -73,6 +73,12 @@ typedef struct {
     uint32_t offset;
 } dir_entry_location_t;
 
+typedef struct {
+    uint64_t disk_size_bytes;
+    uint32_t vol_id;
+    uint64_t used_space;
+    char vol_lab[12];
+} __attribute__((packed)) disk_info;
 
 // --- Public API Functions ---
 
@@ -110,5 +116,6 @@ uint32_t fat32_get_parent_cluster(uint32_t cluster);
 void fat_name_to_string(const char fat_name[11], char* out_name);
 bool fat32_write_file(FAT32_DirectoryEntry* entry, const void* buffer, uint32_t size);
 bool fat32_copy_file(const char* source_name, uint32_t source_dir_cluster, const char* dest_name, uint32_t dest_dir_cluster);
+disk_info fat32_get_disk_size(void);
 
 #endif // FAT32_H

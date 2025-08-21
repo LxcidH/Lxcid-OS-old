@@ -67,17 +67,22 @@ void ide_read_sectors(uint32_t lba, uint8_t count, uint8_t* buf) {
     // 5. Read the data from the disk
     uint16_t* ptr = (uint16_t*)buf;
     for(int i = 0; i < count; i++) {
-        // Wait for the drive to be ready for data transfer (BSY = 0 && DRQ = 1)
-        while (!(inb(IDE_STATUS_REG) & (IDE_STATUS_DRQ | IDE_STATUS_ERR))) {
-            // wait
+        // --- CORRECTED POLLING LOGIC ---
+        // 1. Wait for the drive to not be busy.
+        while (inb(IDE_STATUS_REG) & IDE_STATUS_BSY) {
+            // Wait
         }
 
-        // If error occured
-        if (inb(IDE_STATUS_REG) & IDE_STATUS_ERR) {
-            // Handle error
-            terminal_writeerror("IDE_STATUS_ERR!\n");
-            uint8_t error = inb(IDE_ERROR_REG);
-            terminal_printf("Error: %x", FG_RED, error);
+        // 2. Check for errors or if data is ready.
+        uint8_t status = inb(IDE_STATUS_REG);
+        if (status & IDE_STATUS_ERR) {
+            terminal_writeerror("IDE Read Error!\n");
+            // Handle error...
+            return;
+        }
+        if (!(status & IDE_STATUS_DRQ)) {
+            terminal_writeerror("IDE DRQ not set!\n");
+            // This is an unexpected state, handle as an error.
             return;
         }
 

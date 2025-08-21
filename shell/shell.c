@@ -26,6 +26,7 @@ static void cmd_rm(int argc, char* argv[]);
 static void cmd_cd(int argc, char* argv[]);
 static void cmd_cp(int argc, char* argv[]);
 static void cmd_run(int argc, char* argv[]);
+static void cmd_dInfo(int argc, char* argv[]);
 
 // The command structure definition (internal)
 typedef struct {
@@ -50,6 +51,7 @@ static const shell_command_t commands[] = {
     {"cd", cmd_cd, "Changes directory to the specified path!\n"},
     {"cp", cmd_cp, "Copies a file to another path."},
     {"run", cmd_run, "Runs a binary file!\n"},
+    {"dInfo", cmd_dInfo, "Shows info of all attached drives\n"}
 };
 static const int num_commands = sizeof(commands) / sizeof(shell_command_t);
 
@@ -466,8 +468,12 @@ void cmd_run(int argc, char* argv[]) {
     return;
 }
 
-
-
+void cmd_dInfo(int argc, char* argv[]) {
+    disk_info disk_info = fat32_get_disk_size();
+    terminal_printf("| Volume ID | Volume Label | Volume Size (Bytes) |\n", FG_MAGENTA);
+    terminal_printf("| %d | %s | %d |\n", FG_MAGENTA, disk_info.vol_id, disk_info.vol_lab, disk_info.disk_size_bytes, disk_info.used_space);
+    return;
+}
 
 // Command History definition
 #define HISTORY_MAX_SIZE 16 // Store the last 16 commands

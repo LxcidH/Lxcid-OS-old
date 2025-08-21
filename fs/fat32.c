@@ -14,6 +14,7 @@ typedef struct {
     uint32_t first_data_sector;
     uint32_t sectors_per_cluster;
     uint32_t bytes_per_sec;
+    uint32_t num_fats;
 } FAT32_FSInfo;
 
 // --- Global variables for the FAT32 driver ---
@@ -41,7 +42,7 @@ bool fat32_write_file(FAT32_DirectoryEntry* entry, const void* buffer, uint32_t 
 void fat32_read_file(FAT32_DirectoryEntry* entry, void* buffer);
 uint32_t fat32_get_fat_entry(uint32_t cluster);
 void fat32_free_cluster_chain(uint32_t start_cluster);
-
+uint64_t getTotalDriveSpace(const FAT32_BootSector* bpb);
 // A constant for the number of entries per sector
 #define ENTRIES_PER_SECTOR (g_bytes_per_sec / sizeof(FAT32_DirectoryEntry))
 
@@ -50,6 +51,8 @@ void fat32_free_cluster_chain(uint32_t start_cluster);
 
 void fat32_init() {
     ide_read_sectors(0, 1, &g_boot_sector);
+
+
 
     if (g_boot_sector.bytes_per_sec == 0) {
         terminal_printf("Error: Invalid FAT32 volume.\n", FG_RED);
@@ -61,7 +64,6 @@ void fat32_init() {
     g_fat32_fs_info.root_cluster_num = g_boot_sector.root_clus;
     g_fat32_fs_info.sectors_per_cluster = g_boot_sector.sec_per_clus;
     g_fat32_fs_info.bytes_per_sec = g_boot_sector.bytes_per_sec;
-
     uint32_t fat_start_sector = g_boot_sector.rsvd_sec_cnt;
     uint32_t fat_size_sectors = g_boot_sector.fat_sz32 * g_boot_sector.num_fats;
     g_fat32_fs_info.first_data_sector = fat_start_sector + fat_size_sectors;
@@ -880,4 +882,31 @@ uint32_t fat32_get_fat_entry(uint32_t cluster) {
     return table_value & 0x0FFFFFFF;
 }
 
+disk_info fat32_get_disk_size(void) {
+    disk_info dInfo;
+
+    FAT32_BootSector bs = g_boot_sector;
+    dInfo.disk_size_bytes = getTotalDriveSpace(&g_boot_sector);
+    dInfo.vol_id = bs.vol_id;
+    strcpy(dInfo.vol_lab, bs.vol_lab);
+    return dInfo;
+}
+
+uint32_t get_total_sectors(const FAT32_BootSector* bpb) {
+    // If the 32-bit field is non-zero, use it.
+    if (bpb->tot_sec32 != 0) {
+        return bpb->tot_sec32;
+    } else {
+        // Otherwise, use the 16-bit field.
+        return bpb->tot_sec16;
+    }
+}
+
+// Now, use this function in your size calculation
+uint64_t getTotalDriveSpace(const FAT32_BootSector* bpb) {
+    uint32_t total_sectors = get_total_sectors(bpb);
+
+    // This calculation will now work correctly
+    return (uint64_t)total_sectors * bpb->bytes_per_sec;
+}
 

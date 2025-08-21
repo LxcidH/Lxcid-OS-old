@@ -104,7 +104,7 @@ populate-disk: all
 # UPDATED: The run command no longer rebuilds the disk.
 run: kernel
 	@echo "Starting QEMU..."
-	qemu-system-i386 -kernel $(BUILDDIR)/kernel.bin -drive format=raw,file=fat_disk.img
+	qemu-system-i386 -kernel $(BUILDDIR)/kernel.bin -hda fat_disk.img
 
 clean:
 	@echo "Cleaning build directory..."
