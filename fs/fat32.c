@@ -50,7 +50,7 @@ uint64_t getTotalDriveSpace(const FAT32_BootSector* bpb);
 // --- Public API Functions ---
 
 void fat32_init() {
-    ide_read_sectors(0, 1, &g_boot_sector);
+    ide_read_sectors(0, 1, (uint8_t*)&g_boot_sector);
 
 
 
