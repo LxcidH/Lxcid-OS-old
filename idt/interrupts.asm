@@ -1,11 +1,10 @@
 ; =========================================================================
-;              interrupts.asm - Low-Level Interrupt Stubs
-;                       (Full, Corrected Version)
+;           interrupts.asm - Low-Level Interrupt Stubs
 ; =========================================================================
 
 ; This is the single C function that will handle all interrupts.
 extern c_interrupt_handler
-extern syscall_handler
+
 ; A macro to create an ISR stub for exceptions with no error code.
 %macro ISR_NO_ERR_CODE 1
     global isr%1
@@ -62,12 +61,11 @@ common_handler_stub:
 
     popa            ; Restore general-purpose registers.
     add esp, 8      ; Clean up the pushed error code and interrupt number.
-    ; NO 'sti' here!
-    iret            ; Atomically restore state and return from interrupt.
+    iret            ; Atomically restore EIP, CS, EFLAGS, etc. and return.
 
 
 ; =========================================================================
-;                      MUST INCLUDE ALL DEFINITIONS!
+;                      GENERATE ALL STUB DEFINITIONS
 ; =========================================================================
 
 ; --- Generate all 32 ISR stubs (CPU Exceptions 0-31) ---

@@ -1,39 +1,94 @@
 #include "lib/syscalls.h"
-#include <stddef.h>
+#include "lib/libc.h"
 
-// A simple function to get a character from the keyboard
-// We will need a sys_getchar later, but for now, this works
-int getchar() {
-    char c;
-    read(0, &c, 1); // Read 1 character from stdin (fd=0)
-    return c;
+#define COLS            80
+#define ROWS            24
+#define STDOUT          1
+
+#define KEY_BACKSPACE   0x08
+#define KEY_ENTER       0x1C
+#define KEY_CTRL_Q      0x11
+#define KEY_ARROW_UP    0x48
+#define KEY_ARROW_DOWN  0x50
+#define KEY_ARROW_LEFT  0x4B
+#define KEY_ARROW_RIGHT 0x4D
+
+char buffer[ROWS][COLS];
+int cursor_x = 0;
+int cursor_y = 0;
+
+void buffer_init() {
+  for (int y = 0; y < ROWS; y++){
+    for (int x = 0; x < COLS; x++) {
+      buffer[y][x] = ' ';
+    }
+  }
 }
 
-void main(int argc, char* argv[]) {
-    clear_screen();
+void editor_redraw() {
+  clear_screen();
+  char line_buffer[COLS];
+  for (int y = 0; y < ROWS; y++) {
+    for (int x = 0; x < COLS; x++) {
+      set_cursor(x, y);
+      write(STDOUT, &buffer[y][x], 1);
+    }
+  }
+  set_cursor(cursor_x, cursor_y);
+}
 
-    const char* welcome = "LxcidOS Editor -- Version 1.0";
-    write(1, welcome, 28);
 
-    int running = 1;
-    while (running) {
-        // 1. Draw the status bar at the bottom of the screen
-        set_cursor(0, 24); // Assuming a 80x25 screen
-        const char* status = "Press 'q' to quit";
-        write(1, status, 17);
+void editor_process_key(int key) {
+    switch (key) {
+        case KEY_CTRL_Q:
+            clear_screen();
+            sys_exit();
+            break;
 
-        // 2. Move the cursor back to a default position
-        set_cursor(0, 1);
+        case KEY_ARROW_UP:
+            if (cursor_y > 0) cursor_y--;
+            break;
+        case KEY_ARROW_DOWN:
+            if (cursor_y < ROWS - 1) cursor_y++;
+            break;
+        case KEY_ARROW_LEFT:
+            if (cursor_x > 0) cursor_x--;
+            break;
+        case KEY_ARROW_RIGHT:
+            if (cursor_x < COLS - 1) cursor_x++;
+            break;
 
-        // 3. Wait for input
-        int key = getchar();
+        case KEY_BACKSPACE:
+            if (cursor_x > 0) {
+                cursor_x--;
+                buffer[cursor_y][cursor_x] = ' ';
+            }
+            break;
 
-        // 4. Process input
-        if (key == 'q') {
-            running = 0;
-        }
+        default:
+            // Check for printable ASCII characters
+            if (key >= ' ' && key <= '~') {
+                if (cursor_x < COLS) {
+                    buffer[cursor_y][cursor_x] = (char)key;
+                    cursor_x++;
+                }
+            }
+            break;
     }
 
-    // On exit, clear the screen again to return to a clean shell
-    clear_screen();
+    // Ensure cursor never goes out of bounds
+    if (cursor_x >= COLS) cursor_x = COLS - 1;
+    if (cursor_y >= ROWS) cursor_y = ROWS - 1;
+}
+
+
+void main(void) {
+  buffer_init();
+
+  while (1) {
+    editor_redraw();
+    write(1, "uwu", 3);
+    int key = get_key();
+    editor_process_key(key);
+  }
 }

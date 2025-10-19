@@ -6,6 +6,7 @@
 #include "../lib/math.h"
 #include "../memory/pmm.h"
 #include "../memory/heap.h"
+#include "../fs/elf.h"
 
 jmp_buf g_shell_checkpoint;
 uint32_t g_current_directory_cluster;
@@ -19,7 +20,7 @@ static void cmd_memmap(int argc, char* argv[]);
 static void cmd_clear(int argc, char* argv[]);
 static void cmd_peek(int argc, char* argv[]);
 static void cmd_poke(int argc, char* argv[]);
-static void cmd_mkfile(int argc, char* argv[]);
+static void cmd_touch(int argc, char* argv[]);
 static void cmd_mkdir(int argc, char* argv[]);
 static void cmd_ls(int argc, char* argv[]);
 static void cmd_rm(int argc, char* argv[]);
@@ -27,6 +28,8 @@ static void cmd_cd(int argc, char* argv[]);
 static void cmd_cp(int argc, char* argv[]);
 static void cmd_run(int argc, char* argv[]);
 static void cmd_dInfo(int argc, char* argv[]);
+static void cmd_fwrite(int argc, char* argv[]);
+static void cmd_cat(int argc, char* argv[]);
 
 // The command structure definition (internal)
 typedef struct {
@@ -45,13 +48,15 @@ static const shell_command_t commands[] = {
     {"peek", cmd_peek, "Reads a 32-bit value from a memory address.\n"},
     {"poke", cmd_poke, "Writes a 32-bit value to a memory address.\n"},
     {"ls", cmd_ls, "Lists the files within the current directory.\n"},
-    {"mkfile", cmd_mkfile, "Creates a file in the current directory with the defined filename.\n"},
+    {"touch", cmd_touch, "Creates a file in the current directory with the defined filename.\n"},
     {"mkdir", cmd_mkdir, "Creates a directory at the specified location.\n"},
     {"rm", cmd_rm, "Removes a file/directory.\n"},
     {"cd", cmd_cd, "Changes directory to the specified path!\n"},
-    {"cp", cmd_cp, "Copies a file to another path."},
+    {"cp", cmd_cp, "Copies a file to another path.\n"},
     {"run", cmd_run, "Runs a binary file!\n"},
-    {"dInfo", cmd_dInfo, "Shows info of all attached drives\n"}
+    {"dInfo", cmd_dInfo, "Shows info of all attached drives\n"},
+    {"fwrite", cmd_fwrite, "Writes a buffer to the specified file\n"},
+    {"cat", cmd_cat, "Reads a file to the terminal\n"}
 };
 static const int num_commands = sizeof(commands) / sizeof(shell_command_t);
 
@@ -272,9 +277,9 @@ static void cmd_ls(int argc, char* argv[]) {
     fat32_list_dir(g_current_directory_cluster);
 }
 
-static void cmd_mkfile(int argc, char* argv[]) {
+static void cmd_touch(int argc, char* argv[]) {
     if (argc < 2) {
-        terminal_printf("USAGE: mkfile <filename.extension>\n", FG_RED);
+        terminal_printf("USAGE: touch <filename.extension>\n", FG_RED);
         return;
     }dir_entry_location_t new_file_loc;
     if(fat32_create_file(argv[1], g_current_directory_cluster, &new_file_loc)) {
@@ -436,36 +441,33 @@ static void cmd_cp(int argc, char* argv[]) {
 }
 
 void cmd_run(int argc, char* argv[]) {
-    if (argc < 2) {
-        terminal_printf("USAGE: run <program.bin> [args...]\n", FG_RED);
+  if (argc < 2) {
+        terminal_printf("USAGE: run <program.elf>\n", FG_RED);
         return;
     }
 
-    FAT32_DirectoryEntry* program = fat32_find_entry(argv[1], g_current_directory_cluster);
-    if (program == NULL) {
+    FAT32_DirectoryEntry* program_entry = fat32_find_entry(argv[1], g_current_directory_cluster);
+    if (program_entry == NULL) {
         terminal_printf("Error: Program '%s' not found.\n", FG_RED, argv[1]);
         return;
     }
 
-    uint8_t* pMemory = (uint8_t*)0x150000;
-    fat32_read_file(program, pMemory);
+    terminal_printf("Executing '%s'...\n", FG_MAGENTA, argv[1]);
 
-    // --- THE FIX ---
-    // 1. Define the function pointer with the correct arguments (argc, argv)
-    void (*program_entry)(int, char**) = (void (*)(int, char**))pMemory;
+    uint32_t entry_point = elf_load(program_entry);
 
-    // 2. Prepare the arguments for the new program
-    int program_argc = argc - 1;
-    char** program_argv = &argv[1]; // Shift the argument list over by one
+    if (entry_point == 0) {
+        terminal_printf("Failed to execute program (ELF loading error).\n", FG_RED);
+        return;
+    }
+
+    void (*program_start)(void) = (void (*)(void))entry_point;
 
     if (setjmp(g_shell_checkpoint) == 0) {
-        terminal_printf("Executing '%s'...\n", FG_MAGENTA, argv[1]);
-        // 3. Call the program and pass the new arguments
-        program_entry(program_argc, program_argv);
+        program_start();
     } else {
-        terminal_printf("Program finished, returning to shell.\n", FG_GREEN);
+        terminal_printf("\nProgram finished, returning to shell.\n", FG_GREEN);
     }
-    return;
 }
 
 void cmd_dInfo(int argc, char* argv[]) {
@@ -475,6 +477,80 @@ void cmd_dInfo(int argc, char* argv[]) {
     return;
 }
 
+void cmd_fwrite(int argc, char* argv[]) {
+    if (argc < 3) { // 1. Must be 3 arguments
+        terminal_printf("USAGE: fwrite <filename> <text>\n", FG_MAGENTA);
+        return;
+    }
+
+    FAT32_DirectoryEntry entry;
+    dir_entry_location_t loc;
+    
+    // Find the file and get its location
+    if (!fat32_find_entry_by_name(argv[1], g_current_directory_cluster, &loc, &entry)) {
+        terminal_printf("ERROR: Failed to find %s\n", FG_RED, argv[1]);
+        return;
+    }
+    
+    // Get the data and size to write
+    const char* buffer = argv[2];
+    uint32_t size = strlen(buffer);
+
+    // 2. Write the file data
+    if (fat32_write_file(&entry, buffer, size)) {
+        // 3. CRITICAL: Write the updated entry (with new size/cluster) back to disk
+        if (fat32_update_entry(&entry, &loc)) {
+            terminal_printf("Wrote %d bytes to %s\n", FG_GREEN, size, argv[1]);
+        } else {
+            terminal_printf("ERROR: Failed to update directory entry.\n", FG_RED);
+        }
+    } else {
+        terminal_printf("ERROR: Failed to write file data.\n", FG_RED);
+    }
+    
+    // 4. No free needed because 'entry' and 'loc' are on the stack
+}
+void cmd_cat(int argc, char* argv[]) {
+    if (argc < 2) {
+        terminal_printf("USAGE: cat <filename>\n", FG_MAGENTA);
+        return;
+    }
+
+    // 1. Get the file entry (this is heap-allocated)
+    FAT32_DirectoryEntry* file = fat32_find_entry(argv[1], g_current_directory_cluster);
+
+    if (file == NULL) {
+        terminal_printf("ERROR: Failed to find %s\n", FG_RED, argv[1]);
+        return; // 'file' is already NULL, so no free needed
+    }
+
+    if (file->file_size == 0) {
+        // Handle empty file, nothing to read
+        free(file); // Don't forget to free!
+        return;
+    }
+
+    // 2. Allocate the *correct* buffer size (+1 for null terminator)
+    char* buffer = malloc(file->file_size + 1);
+    if (buffer == NULL) {
+        terminal_printf("ERROR: Not enough memory to read file.\n", FG_RED);
+        free(file); // Free the file entry before returning
+        return;
+    }
+
+    // 3. Pass 'buffer' (char*), NOT '&buffer' (char**)
+    fat32_read_file(file, buffer);
+
+    // 4. Null-terminate the buffer so we can print it as a string
+    buffer[file->file_size] = '\0';
+
+    // 5. Actually print the content
+    terminal_printf("%s\n", FG_WHITE, buffer);
+
+    // 6. Free ALL allocated memory
+    free(buffer);
+    free(file);
+}
 // Command History definition
 #define HISTORY_MAX_SIZE 16 // Store the last 16 commands
 

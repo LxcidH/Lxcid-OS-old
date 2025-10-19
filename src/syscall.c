@@ -39,7 +39,6 @@ void syscall_handler(registers_t* regs) {
         case SYS_SET_CURSOR:
             kernel_sys_set_cursor(regs);
             break;
-
         default:
             terminal_printf("Unknown syscall: %d\n", FG_RED, regs->eax);
             longjmp(g_shell_checkpoint, 1); // Terminate on unknown syscall

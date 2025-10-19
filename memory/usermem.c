@@ -1,5 +1,4 @@
-#include <stdint.h>
-#include <string.h> // For memcpy
+#include "../lib/string.h" // For memcpy
 #include "usermem.h"
 // Define the boundaries of user space memory
 

@@ -1,14 +1,8 @@
 #include "idt.h"
-#include "../drivers/terminal.h"
+#include "../drivers/terminal.h" // Relative paths may vary
 #include "../drivers/pic.h"
 #include "../drivers/keyboard.h"
 #include "../src/syscall.h"
-#include "interrupts.h"
-
-// --- Structs (defined in idt.h, but good to remember their layout) ---
-// struct idt_entry_struct idt_entries[256];
-// struct idt_ptr_struct   idt_ptr;
-
 
 // --- Extern declarations for assembly ISR stubs ---
 // These are the low-level entry points defined in interrupts.asm
@@ -34,17 +28,21 @@ extern void default_handler();
 struct idt_entry_struct idt_entries[256];
 struct idt_ptr_struct   idt_ptr;
 
+// The C wrapper for the 'lidt' instruction.
+static inline void idt_load(struct idt_ptr_struct* idt_ptr) {
+    asm volatile ("lidt (%0)" : : "r"(idt_ptr));
+}
 
 // --- C-level Interrupt Handlers ---
 
 // This function handles all CPU exceptions (ISRs 0-31)
-void fault_handler(struct registers* regs) {
+void fault_handler(registers_t* regs) {
     terminal_writeerror("EXCEPTION: %d - System Halted.", regs->int_no);
     for (;;);
 }
 
 // This function handles all hardware interrupts (IRQs 0-15)
-void irq_handler(struct registers* regs) {
+void irq_handler(registers_t* regs) {
     // Dispatch to the correct driver based on the hardware interrupt number
     switch (regs->int_no) {
         case 33: // IRQ 1: Keyboard
@@ -60,22 +58,21 @@ void irq_handler(struct registers* regs) {
 
 // --- Unified Interrupt Dispatcher ---
 // This is the single C function called by the assembly stub. It decides whether
-// the interrupt is a fault or an IRQ and calls the appropriate handler.
-void c_interrupt_handler(struct registers* regs) {
-    if (regs->int_no < 32) {
-        // It's a CPU exception.
-        fault_handler(regs);
-    } else if (regs->int_no == 128) {
+// the interrupt is a fault, an IRQ, or a syscall.
+void c_interrupt_handler(registers_t* regs) {
+    if (regs->int_no == 128) {
         // It's a system call, so pass the registers to the syscall handler
         syscall_handler(regs);
-    } else {
+    } else if (regs->int_no >= 32 && regs->int_no <= 47) {
         // It's a hardware interrupt (IRQ).
         irq_handler(regs);
         // We MUST send an End-of-Interrupt (EOI) to the PICs for IRQs.
         pic_send_eoi(regs->int_no - 32);
+    } else {
+        // It's a CPU exception.
+        fault_handler(regs);
     }
 }
-
 
 // --- IDT Setup ---
 
@@ -100,32 +97,29 @@ void idt_init(void) {
     }
 
     // --- ISRs (CPU Exceptions) ---
-    // Create an array of pointers to the ISR functions for cleaner setup.
-    void* isr_routines[32] = {
-        isr0, isr1, isr2, isr3, isr4, isr5, isr6, isr7,
-        isr8, isr9, isr10, isr11, isr12, isr13, isr14, isr15,
-        isr16, isr17, isr18, isr19, isr20, isr21, isr22, isr23,
-        isr24, isr25, isr26, isr27, isr28, isr29, isr30, isr31
+    void* isr_routines[] = {
+        isr0, isr1, isr2, isr3, isr4, isr5, isr6, isr7, isr8, isr9, isr10,
+        isr11, isr12, isr13, isr14, isr15, isr16, isr17, isr18, isr19, isr20,
+        isr21, isr22, isr23, isr24, isr25, isr26, isr27, isr28, isr29, isr30, isr31
     };
-
-    // Point the first 32 entries (0-31) to their respective stubs.
     for (int i = 0; i < 32; i++) {
         idt_set_gate(i, (uint32_t)isr_routines[i], 0x08, 0x8E);
     }
 
     // --- IRQs (Hardware Interrupts) ---
-    // Create an array for the IRQ functions.
-    void* irq_routines[16] = {
-        irq0, irq1, irq2, irq3, irq4, irq5, irq6, irq7,
-        irq8, irq9, irq10, irq11, irq12, irq13, irq14, irq15
+    void* irq_routines[] = {
+        irq0, irq1, irq2, irq3, irq4, irq5, irq6, irq7, irq8,
+        irq9, irq10, irq11, irq12, irq13, irq14, irq15
     };
-
-    // Point the next 16 entries (32-47) to their respective stubs.
     for (int i = 0; i < 16; i++) {
         idt_set_gate(32 + i, (uint32_t)irq_routines[i], 0x08, 0x8E);
     }
 
-    idt_set_gate(0x80, (uint32_t)isr128, 0x08, 0x8E);
+    // --- System Call Gate ---
+    // CRITICAL FIX: Set the flags to 0xEE instead of 0x8E.
+    // 0xEE = Present(1), DPL=3(11), Type=Trap Gate(1110)
+    // This allows user-mode (Ring 3) programs to call 'int 0x80'.
+    idt_set_gate(128, (uint32_t)isr128, 0x08, 0xEE);
 
     // Load the IDT using the assembly instruction.
     idt_load(&idt_ptr);

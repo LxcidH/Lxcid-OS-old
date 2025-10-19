@@ -3,11 +3,14 @@
 
 #include <stddef.h> // For size_t
 
-// Prototypes for your user-space syscall wrappers
+// --- Function Prototypes for User-Space Programs ---
+
 int write(int fd, const void* buffer, size_t count);
-// Add other syscalls like exit(), open(), etc. here
 int open(const char* filename);
 int read(int fd, void* buffer, size_t count);
 void clear_screen(void);
 void set_cursor(int x, int y);
-#endif
+void exit(void); 
+int get_key(void);
+
+#endif // SYSCALLS_H

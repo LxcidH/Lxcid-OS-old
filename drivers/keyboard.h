@@ -14,6 +14,4 @@ void keyboard_handler(void);
 // Initializes the keyboard driver.
 void keyboard_init(void);
 
-// Waits for and returns a single character from the keyboard buffer.
-char keyboard_getc(void);
 #endif
