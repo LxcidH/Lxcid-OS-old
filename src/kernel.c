@@ -33,8 +33,6 @@ void kmain(multiboot_info_t* mbi) {
     fat32_init();
     keyboard_init();
 
-    terminal_welcome();
-
     asm volatile ("sti");
 
     shell_init();

@@ -180,10 +180,6 @@ void terminal_writeerror(const char* format, ...) {
     terminal_putchar('\n', FG_RED);
 }
 
-void terminal_welcome() {
-    terminal_printf("LxcidOS - Version 0.0.1\n", FG_MAGENTA);
-}
-
 // The terminal_writedec function is not used by the rest of your code
 // and can be safely removed if you wish. It remains here for completeness.
 void terminal_writedec(uint32_t n) {

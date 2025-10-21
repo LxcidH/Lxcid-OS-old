@@ -242,6 +242,7 @@ static void cmd_clear(int argc, char* argv[]) {
     (void)argc; // Mark as unused
     (void)argv; // Mark as unused
     terminal_initialize();
+  terminal_printf("-------------------------------- LxcidOS v1.0.0 --------------------------------\n", FG_MAGENTA);
 }
 
 static void cmd_peek(int argc, char* argv[]) {
@@ -605,6 +606,7 @@ static void shell_redraw_line() {
 void shell_init(void) {
     buffer_index = 0;
     g_current_directory_cluster = fat32_get_root_cluster();
+    terminal_printf("-------------------------------- LxcidOS v1.0.0 --------------------------------\n", FG_MAGENTA);
     terminal_printf("LxcidOS | %s >", FG_MAGENTA, g_current_path); // Inital prompt
 }
 
@@ -704,4 +706,8 @@ void shell_handle_key(int key) {
             }
             break;
     }
+}
+
+uint32_t shell_getCurrentDirCluster(void) {
+  return g_current_directory_cluster;
 }
